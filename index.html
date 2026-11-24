@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Pedestrian Panic</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="game-stage" aria-label="Pedestrian Panic Game">
+      <canvas id="game-canvas" width="320" height="568"></canvas>
+
+      <!-- Live HUD -->
+      <div id="hud" class="hud hidden">
+        <div class="hud-left">
+          <div class="score-pill">
+            <span class="score-label">Pts</span>
+            <span id="hud-score">0</span>
+          </div>
+          <div id="hud-chain" class="chain-badge">1x BLOCKING</div>
+        </div>
+        <div class="hud-right">
+          <div id="hud-brake" class="brake-pill" data-state="ready">BRAKE READY</div>
+          <button id="mute-btn" class="icon-btn" type="button" aria-label="Mute sound">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path class="snd-wave" d="M15.5 8.5a5 5 0 0 1 0 7"></path>
+              <path class="snd-wave" d="M18.8 5.2a9.5 9.5 0 0 1 0 13.6"></path>
+              <line class="snd-mute" x1="22" y1="9" x2="16" y2="15" style="display: none;"></line>
+              <line class="snd-mute" x1="16" y1="9" x2="22" y2="15" style="display: none;"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Splash Screen -->
+      <div id="splash-screen" class="overlay">
+        <div class="panel">
+          <div class="kicker">Reverse Infinite Runner</div>
+          <h1>PEDESTRIAN<br />PANIC</h1>
+          <p class="subtitle">Get in everyone's way on the sidewalk — without getting shoved off the top!</p>
+
+          <div id="splash-cast" class="splash-cast" aria-hidden="true"></div>
+
+          <div class="controls-list">
+            <div><strong>Steer:</strong> ← / → Arrow keys or <strong>Tilt</strong> device</div>
+            <div><strong>Slow Down:</strong> Hold <strong>Space</strong> or <strong>Press</strong> screen (up to 1s) to shove crowds back &amp; recover</div>
+            <div><strong>Score:</strong> Block Pedestrians directly or in chains (Hero → Ped → Ped)</div>
+          </div>
+
+          <button id="start-btn" class="primary-btn" type="button">Start Walking</button>
+          <button id="tilt-btn" class="secondary-btn" type="button">Enable Tilt Steering</button>
+          <div id="tilt-status" class="tilt-status"></div>
+          <div id="splash-best" class="best-line" hidden></div>
+        </div>
+      </div>
+
+      <!-- Game Over Screen -->
+      <div id="end-screen" class="overlay hidden">
+        <div class="panel">
+          <div class="kicker">Pushed Off The Sidewalk!</div>
+          <h1>GAME OVER</h1>
+
+          <div class="final-score-box">
+            <div class="final-score-label">Total Points</div>
+            <div id="final-score">0</div>
+            <div id="new-best-badge" class="new-best" hidden>NEW HIGH SCORE</div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div id="stat-blocked" class="stat-val">0</div>
+              <div class="stat-lbl">Slowed</div>
+            </div>
+            <div class="stat-card">
+              <div id="stat-chain" class="stat-val">0x</div>
+              <div class="stat-lbl">Max Pileup</div>
+            </div>
+            <div class="stat-card">
+              <div id="stat-time" class="stat-val">0.0s</div>
+              <div class="stat-lbl">Survived</div>
+            </div>
+          </div>
+
+          <div class="subtitle" style="margin-bottom: 14px;">
+            Best Score: <strong id="final-best" style="color: #facc15;">0</strong> pts
+          </div>
+
+          <button id="restart-btn" class="primary-btn" type="button">Play Again</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="desktop-hint">← / → (or A / D) to weave • Hold Space (or click &amp; hold) to Slow Down</div>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
