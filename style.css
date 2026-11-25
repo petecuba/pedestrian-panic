@@ -16,6 +16,10 @@
   -webkit-touch-callout: none;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;

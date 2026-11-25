@@ -15,6 +15,29 @@ function clamp(v, min, max) {
   return v < min ? min : v > max ? max : v;
 }
 
+const CENSORED_REACTIONS = [
+  '$#@%!',
+  '#@!*',
+  '%$#@!',
+  '*&@#!',
+  '!@#?',
+  '@%$#!',
+  '#*@!',
+];
+
+function pickReaction(chainDepth) {
+  // 1 in 50 chance for the classic NYC line!
+  if (Math.random() < 1 / 50) {
+    return { text: "I'M WALKIN' HERE!", isRare: true };
+  }
+  // Mix of classic ! / !! and censored comic cuss words
+  if (Math.random() < 0.52) {
+    return { text: chainDepth > 1 ? '!!' : '!', isRare: false };
+  }
+  const text = CENSORED_REACTIONS[Math.floor(Math.random() * CENSORED_REACTIONS.length)];
+  return { text, isRare: false };
+}
+
 function smoothstep(t) {
   const x = clamp(t, 0, 1);
   return x * x * (3 - 2 * x);
@@ -471,24 +494,25 @@ export class GameSimulation {
         const depthMult = 1 + (ped.chainDepth - 1) * CONFIG.SCORING.CHAIN_BONUS_PER_DEPTH;
         const pts = CONFIG.SCORING.POINTS_PER_SEC_FULL * slowRatio * depthMult * dt;
         framePoints += pts;
-        ped.accumulatedPts += pts;
-        ped.popupTimer += dt;
 
-        if (ped.popupTimer >= 0.42 && ped.accumulatedPts >= 1.2) {
-          const displayPts = Math.max(1, Math.round(ped.accumulatedPts));
+        // Emit reaction popup (!, censored cuss, or 1-in-50 "I'M WALKIN' HERE!")
+        // at the same cadence as the previous point indicator animation
+        ped.popupTimer += dt;
+        if (ped.popupTimer >= 0.42) {
+          const reaction = pickReaction(ped.chainDepth);
           this.events.push({
-            type: 'scorePopup',
+            type: 'reactionPopup',
             x: ped.x,
             y: ped.y - 31,
-            points: displayPts,
+            text: reaction.text,
+            isRare: reaction.isRare,
             chainDepth: ped.chainDepth,
           });
-          ped.accumulatedPts = 0;
           ped.popupTimer = 0;
         }
       } else {
-        ped.popupTimer = 0;
-        ped.accumulatedPts = 0;
+        // Prime timer so the first reaction fires immediately on fresh contact
+        ped.popupTimer = 0.40;
       }
     }
 
@@ -587,8 +611,7 @@ export class GameSimulation {
       isImpededByHero: false,
       isImpededByOther: false,
       everBlockedByHero: false,
-      accumulatedPts: 0,
-      popupTimer: 0,
+      popupTimer: 0.40,
     });
   }
 }

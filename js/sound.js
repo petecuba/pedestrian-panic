@@ -65,6 +65,18 @@ export class SoundEngine {
     this.playTone(base, base * 1.15, 0.08, 'sine', 0.055);
   }
 
+  playRareReaction() {
+    if (!this.ctx || this.muted) return;
+    this.playTone(540, 720, 0.09, 'triangle', 0.08);
+    setTimeout(() => this.playTone(720, 880, 0.12, 'triangle', 0.08), 80);
+  }
+
+  playPigeonFlutter() {
+    if (!this.ctx || this.muted) return;
+    this.playTone(280, 420, 0.06, 'sine', 0.025);
+    setTimeout(() => this.playTone(320, 480, 0.06, 'sine', 0.02), 55);
+  }
+
   playPush() {
     this.playTone(135, 95, 0.06, 'triangle', 0.035);
   }

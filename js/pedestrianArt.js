@@ -90,14 +90,13 @@ const ARCHETYPES = [
   { hairStyle: 'bob',      outfit: 'jacket',   accessory: 'scarf' },
 ];
 
-// 5-frame walk cycle: ZERO vertical shoulder/torso bounce!
-// Only feet stride cleanly and lower sleeve cuffs shift subtly.
+// 5-frame walk cycle: ZERO shoulder bounce; very subtle 1px head bounce on peak stride frames!
 const FRAME_POSES = [
-  { leftFootY: 62, rightFootY: 62, leftCuffDy: 0,  rightCuffDy: 0 },
-  { leftFootY: 63, rightFootY: 59, leftCuffDy: -1, rightCuffDy: 1 },
-  { leftFootY: 64, rightFootY: 56, leftCuffDy: -2, rightCuffDy: 1 },
-  { leftFootY: 59, rightFootY: 63, leftCuffDy: 1,  rightCuffDy: -1 },
-  { leftFootY: 56, rightFootY: 64, leftCuffDy: 1,  rightCuffDy: -2 },
+  { leftFootY: 62, rightFootY: 62, leftCuffDy: 0,  rightCuffDy: 0,  headBob: 0 },
+  { leftFootY: 63, rightFootY: 59, leftCuffDy: -1, rightCuffDy: 1,  headBob: 0 },
+  { leftFootY: 64, rightFootY: 56, leftCuffDy: -2, rightCuffDy: 1,  headBob: -1 },
+  { leftFootY: 59, rightFootY: 63, leftCuffDy: 1,  rightCuffDy: -1, headBob: 0 },
+  { leftFootY: 56, rightFootY: 64, leftCuffDy: 1,  rightCuffDy: -2, headBob: -1 },
 ];
 
 function shadeHex(hex, delta) {
@@ -211,16 +210,26 @@ function drawRoundedArm(ctx, side, ty, cuffDy, sleeveCol, sleeveDark, skinCol, s
 }
 
 /**
+ * Draws a single non-overlapping stepped oval shadow at exact 20% opacity.
+ */
+function drawCharacterShadow(ctx) {
+  const shadowColor = 'rgba(18, 20, 24, 0.20)';
+  px(ctx, 11, 61, 22, 1, shadowColor);
+  px(ctx, 8,  62, 28, 3, shadowColor);
+  px(ctx, 11, 65, 22, 1, shadowColor);
+}
+
+/**
  * Draws Hero redrawn directly from Pete's original ped1..ped5 art:
  *  - Brown short hair with warm highlight, peach ears/neck
  *  - Collared sky-blue shirt with softly rounded shoulders
  *  - Left arm down by side; right arm bent UP holding a glowing smartphone!
- *  - Khaki pants + brown shoes, zero shoulder bounce during walk cycle!
+ *  - Khaki pants + brown shoes, steady shoulders + subtle 1px head bounce!
  */
 function drawHeroFrame(ctx, frameIdx) {
   const pose = FRAME_POSES[frameIdx];
   const ty = 30;
-  const hy = 4;
+  const hy = 4 + pose.headBob;
 
   const skin = '#f2c7a5';
   const skinDark = '#d1a27e';
@@ -234,10 +243,8 @@ function drawHeroFrame(ctx, frameIdx) {
   const pantsDark = '#6b5b47';
   const shoes = '#3d2d22';
 
-  // 1. Ground shadow
-  px(ctx, 10, 61, 24, 5, 'rgba(28, 28, 32, 0.72)');
-  px(ctx, 8,  62, 28, 3, 'rgba(28, 28, 32, 0.65)');
-  px(ctx, 12, 62, 20, 3, 'rgba(18, 18, 22, 0.45)');
+  // 1. Clean 20% opacity ground shadow
+  drawCharacterShadow(ctx);
 
   // 2. Khaki legs & brown shoes
   const drawLeg = (x, footY) => {
@@ -295,17 +302,15 @@ function drawHeroFrame(ctx, frameIdx) {
 }
 
 /**
- * Draws one crisp 44x68 pedestrian frame with rounded shoulders & zero shoulder bounce.
+ * Draws one crisp 44x68 pedestrian frame with rounded steady shoulders & subtle head bounce.
  */
 function drawFinePixelFrame(ctx, s, frameIdx) {
   const pose = FRAME_POSES[frameIdx];
   const ty = 30;
-  const hy = 4;
+  const hy = 4 + pose.headBob;
 
-  // 1. Stepped ground shadow
-  px(ctx, 10, 61, 24, 5, 'rgba(28, 28, 32, 0.72)');
-  px(ctx, 8,  62, 28, 3, 'rgba(28, 28, 32, 0.65)');
-  px(ctx, 12, 62, 20, 3, 'rgba(18, 18, 22, 0.45)');
+  // 1. Clean 20% opacity ground shadow
+  drawCharacterShadow(ctx);
 
   // 2. Legs & Shoes
   const drawLeg = (x, footY) => {
@@ -699,3 +704,100 @@ export function buildPedestrianSprites() {
 }
 
 export const PEDESTRIAN_VARIANT_COUNT = ARCHETYPES.length;
+
+/**
+ * Generates bicubic pixel-art NYC pigeon sprites:
+ *  - idle: standing on sidewalk
+ *  - peck: bobbing head forward to peck crumbs
+ *  - flyUp / flyMid / flyDown: 3-frame flapping flight cycle
+ */
+export function buildPigeonSprites() {
+  const PW = 28;
+  const PH = 28;
+  const OUT_PW = 22;
+  const OUT_PH = 22;
+
+  const master = document.createElement('canvas');
+  master.width = PW;
+  master.height = PH;
+  const mCtx = master.getContext('2d');
+  mCtx.imageSmoothingEnabled = false;
+
+  const makeFrame = (drawFn) => {
+    mCtx.clearRect(0, 0, PW, PH);
+    drawFn(mCtx);
+    return bicubicResampleCanvas(master, OUT_PW, OUT_PH);
+  };
+
+  const bodyGray = '#8c96a3';
+  const bodyLight = '#aeb8c4';
+  const bodyDark = '#5c6470';
+  const tailDark = '#3a404a';
+  const neckGreen = '#4a8f7a';
+  const neckPlum = '#7d5b8c';
+  const beak = '#d99a4e';
+  const feet = '#d16b5a';
+
+  const drawGrounded = (pecking) => {
+    // Feet
+    px(mCtx, 11, 21, 2, 3, feet);
+    px(mCtx, 15, 21, 2, 3, feet);
+    // Tail feathers
+    px(mCtx, 5, 17, 6, 4, tailDark);
+    px(mCtx, 7, 16, 4, 3, bodyDark);
+    // Plump oval pigeon body
+    px(mCtx, 9, 13, 11, 8, bodyGray);
+    px(mCtx, 10, 12, 9, 9, bodyGray);
+    px(mCtx, 11, 14, 7, 5, bodyLight); // Wing patch
+    px(mCtx, 11, 15, 6, 1, tailDark);  // Classic double rock-dove wing bars!
+    px(mCtx, 11, 17, 5, 1, tailDark);
+    // Iridescent neck & head
+    const headX = pecking ? 20 : 17;
+    const headY = pecking ? 16 : 9;
+    px(mCtx, 16, pecking ? 14 : 12, 4, 3, neckGreen);
+    px(mCtx, 17, pecking ? 15 : 13, 2, 2, neckPlum);
+    px(mCtx, headX, headY, 5, 5, bodyDark);
+    px(mCtx, headX + 1, headY + 1, 3, 3, bodyGray);
+    px(mCtx, headX + 3, headY + 1, 1, 1, '#1a1a1d'); // Eye
+    px(mCtx, headX + 5, headY + 2, 2, 2, beak);      // Beak
+  };
+
+  const drawFlying = (wingState) => {
+    // Streamlined flying body (facing right; renderer flips horizontally if flying left)
+    px(mCtx, 4, 13, 6, 4, tailDark);
+    px(mCtx, 9, 12, 11, 6, bodyGray);
+    px(mCtx, 16, 12, 3, 4, neckGreen);
+    px(mCtx, 19, 11, 4, 4, bodyDark);
+    px(mCtx, 23, 12, 2, 2, beak);
+
+    if (wingState === 'up') {
+      // Wings swept high
+      px(mCtx, 8, 3, 10, 9, bodyLight);
+      px(mCtx, 9, 2, 7, 5, bodyGray);
+      px(mCtx, 7, 4, 3, 7, tailDark);
+      px(mCtx, 10, 6, 6, 2, tailDark);
+    } else if (wingState === 'mid') {
+      // Wings spread wide
+      px(mCtx, 9, 9, 10, 5, bodyLight);
+      px(mCtx, 8, 10, 11, 2, tailDark);
+      px(mCtx, 9, 16, 9, 4, bodyDark);
+    } else {
+      // Wings swept down
+      px(mCtx, 9, 16, 10, 9, bodyLight);
+      px(mCtx, 10, 20, 7, 5, bodyDark);
+      px(mCtx, 8, 18, 3, 6, tailDark);
+    }
+  };
+
+  return {
+    idle: makeFrame(() => drawGrounded(false)),
+    peck: makeFrame(() => drawGrounded(true)),
+    fly: [
+      makeFrame(() => drawFlying('up')),
+      makeFrame(() => drawFlying('mid')),
+      makeFrame(() => drawFlying('down')),
+      makeFrame(() => drawFlying('mid')),
+    ],
+  };
+}
+

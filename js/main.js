@@ -293,9 +293,13 @@ function handleEvents(events) {
       case 'push':
         sound.playPush();
         break;
-      case 'scorePopup':
-        renderer.addScorePopup(ev.x, ev.y, ev.points, ev.chainDepth);
-        sound.playScoreTick(ev.chainDepth);
+      case 'reactionPopup':
+        renderer.addReactionPopup(ev.x, ev.y, ev.text, ev.isRare, ev.chainDepth);
+        if (ev.isRare) {
+          sound.playRareReaction();
+        } else {
+          sound.playScoreTick(ev.chainDepth);
+        }
         break;
       case 'gameOver':
         sound.playGameOver();
@@ -316,7 +320,10 @@ function loop(now) {
 
     while (accumulator >= CONFIG.FIXED_DT && state === 'playing') {
       sim.step(CONFIG.FIXED_DT, inputState);
-      renderer.updateEffects(CONFIG.FIXED_DT, sim);
+      const fx = renderer.updateEffects(CONFIG.FIXED_DT, sim);
+      if (fx && fx.pigeonStartled) {
+        sound.playPigeonFlutter();
+      }
       const events = sim.drainEvents();
       handleEvents(events);
       accumulator -= CONFIG.FIXED_DT;

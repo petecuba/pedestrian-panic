@@ -1,22 +1,18 @@
 /**
  * Pedestrian Panic — Canvas Renderer
- * Handles scrolling sidewalk (with curb), Hero sprites, procedural Pedestrians,
- * Hero->Ped->Ped chain feedback, floating score popups, and overhead right-edge awnings.
+ * Handles:
+ *  - Procedurally generated scrolling sidewalk + curb
+ *  - Randomized storefront awnings scrolling along the right edge
+ *  - Sidewalk pigeons that peck and flutter away when Hero or Pedestrians approach
+ *  - Y-sorted Hero & 32 randomized bicubic pixel-art Pedestrians (20% shadows, no underfoot circles)
+ *  - Comic contact reactions (!, censored cuss words, rare "I'M WALKIN' HERE!")
+ *  - Optional debug rounded-corner hitbox overlay
  */
 import { CONFIG } from './config.js';
-import { buildHeroSprites, buildPedestrianSprites } from './pedestrianArt.js';
+import { buildHeroSprites, buildPedestrianSprites, buildPigeonSprites } from './pedestrianArt.js';
+import { buildAwningSprites } from './awningArt.js';
 
-// Walk cycle frame sequence matching ped1..ped5 (indices 0..4)
 const WALK_CYCLE = [0, 1, 2, 1, 0, 3, 4, 3];
-
-function loadImage(src) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = src;
-  });
-}
 
 export class GameRenderer {
   constructor(canvas) {
@@ -27,12 +23,18 @@ export class GameRenderer {
 
     this.sidewalkTile = this.buildSidewalkTile();
     this.heroFrames = buildHeroSprites();
-    this.awningImgs = [];
     this.pedSprites = buildPedestrianSprites();
+    this.pigeonSprites = buildPigeonSprites();
+    this.awningPool = buildAwningSprites();
 
     // Scrolling awning track along the right edge
     this.awnings = [];
     this.lastDistance = 0;
+
+    // Ambient sidewalk pigeons
+    this.pigeons = [];
+    this.pigeonDistAccum = 0;
+    this.nextPigeonGap = 180;
 
     // Visual effects
     this.popups = [];
@@ -42,13 +44,16 @@ export class GameRenderer {
 
   refreshPedestrians() {
     this.pedSprites = buildPedestrianSprites();
+    this.awningPool = buildAwningSprites();
+  }
+
+  rebuildAwnings() {
+    this.awningPool = buildAwningSprites();
+    this.initAwnings();
   }
 
   /**
-   * Procedurally generates a seamless 320x640 (rendered at 2x = 640x1280) urban sidewalk tile:
-   *  - Dark speckled asphalt street on the left (x = 0..22)
-   *  - Raised concrete curb with drop-shadow bevel & joints (x = 22..28)
-   *  - Concrete sidewalk grid slabs with varied tones, subtle grain & hairline cracks (x = 28..320)
+   * Procedurally generates a seamless 320x640 (2x HiDPI = 640x1280) urban sidewalk tile.
    */
   buildSidewalkTile() {
     const W = CONFIG.WIDTH;
@@ -60,7 +65,6 @@ export class GameRenderer {
     const ctx = canvas.getContext('2d');
     ctx.scale(scale, scale);
 
-    // Deterministic PRNG for consistent crisp sidewalk grain
     let seed = 42197;
     const rand = () => {
       seed = (seed * 1664525 + 1013904223) >>> 0;
@@ -69,18 +73,17 @@ export class GameRenderer {
 
     const curbX = CONFIG.CURB_X;
 
-    // 1. Asphalt street strip on left (0 .. curbX - 5)
+    // 1. Asphalt street strip on left
     ctx.fillStyle = '#5c6066';
     ctx.fillRect(0, 0, curbX - 4, H);
     for (let i = 0; i < 950; i++) {
       const gx = rand() * (curbX - 5);
       const gy = rand() * H;
-      const shade = rand() < 0.5 ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.16)';
-      ctx.fillStyle = shade;
+      ctx.fillStyle = rand() < 0.5 ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.16)';
       ctx.fillRect(gx, gy, 1.5, 1.5);
     }
 
-    // 2. Concrete sidewalk slabs (5 columns across curbX..W, 10 rows of 64px)
+    // 2. Concrete sidewalk slabs
     const cols = 5;
     const rows = 10;
     const slabW = (W - curbX) / cols;
@@ -90,11 +93,10 @@ export class GameRenderer {
       for (let c = 0; c < cols; c++) {
         const sx = curbX + c * slabW;
         const sy = r * slabH;
-        const tone = 184 + Math.floor(rand() * 26); // #b8..#d2 varied concrete slabs
+        const tone = 184 + Math.floor(rand() * 26);
         ctx.fillStyle = `rgb(${tone}, ${tone + 1}, ${tone + 2})`;
         ctx.fillRect(sx, sy, slabW + 0.5, slabH + 0.5);
 
-        // Concrete aggregate grain per slab
         const dots = 150 + Math.floor(rand() * 110);
         for (let d = 0; d < dots; d++) {
           const dx = sx + 1 + rand() * (slabW - 2);
@@ -106,7 +108,6 @@ export class GameRenderer {
           ctx.fillRect(dx, dy, sz, sz);
         }
 
-        // Occasional subtle hairline crack
         if (rand() < 0.14) {
           ctx.strokeStyle = 'rgba(78, 82, 88, 0.34)';
           ctx.lineWidth = 0.8;
@@ -124,7 +125,7 @@ export class GameRenderer {
       }
     }
 
-    // 3. Slab expansion-joint seams (horizontal + vertical)
+    // 3. Slab expansion joints
     ctx.strokeStyle = 'rgba(84, 88, 94, 0.72)';
     ctx.lineWidth = 1.25;
     for (let r = 0; r < rows; r++) {
@@ -133,7 +134,6 @@ export class GameRenderer {
       ctx.moveTo(curbX, y);
       ctx.lineTo(W, y);
       ctx.stroke();
-      // Subtle sunlit top highlight beside groove
       ctx.strokeStyle = 'rgba(240, 244, 248, 0.32)';
       ctx.beginPath();
       ctx.moveTo(curbX, y + 1.2);
@@ -149,13 +149,13 @@ export class GameRenderer {
       ctx.stroke();
     }
 
-    // 4. Raised Left Curbstone & Gutter Drop-Shadow (strict boundary at CURB_X)
+    // 4. Raised Left Curbstone & Gutter Drop-Shadow
     ctx.fillStyle = 'rgba(20, 22, 26, 0.52)';
-    ctx.fillRect(curbX - 7, 0, 3, H);        // Gutter shadow onto asphalt
+    ctx.fillRect(curbX - 7, 0, 3, H);
     ctx.fillStyle = '#8b9096';
-    ctx.fillRect(curbX - 4, 0, 4, H);        // Curb face
+    ctx.fillRect(curbX - 4, 0, 4, H);
     ctx.fillStyle = '#cfd4da';
-    ctx.fillRect(curbX - 1, 0, 2, H);        // Crisp top bevel edge
+    ctx.fillRect(curbX - 1, 0, 2, H);
     ctx.strokeStyle = 'rgba(65, 68, 74, 0.65)';
     ctx.lineWidth = 1;
     for (let r = 0; r < rows; r++) {
@@ -176,16 +176,14 @@ export class GameRenderer {
   }
 
   async loadAssets() {
-    const [a1, a2, a3, a4, a5, a6] = await Promise.all([
-      loadImage('awnings/awning.png'),
-      loadImage('awnings/awning2.png'),
-      loadImage('awnings/awning3.png'),
-      loadImage('awnings/awning4.png'),
-      loadImage('awnings/awning5.png'),
-      loadImage('awnings/awning6.png'),
-    ]);
-
-    this.awningImgs = [a1, a2, a3, a4, a5, a6].filter(Boolean);
+    // Wait briefly for Geist Pixel webfont so awning storefront signs render in Geist Pixel
+    if (document.fonts && document.fonts.ready) {
+      await Promise.race([
+        document.fonts.ready,
+        new Promise((resolve) => setTimeout(resolve, 450)),
+      ]);
+    }
+    this.awningPool = buildAwningSprites();
     this.resetEffects();
   }
 
@@ -194,62 +192,180 @@ export class GameRenderer {
     this.skidMarks = [];
     this.skidTimer = 0;
     this.lastDistance = 0;
+    this.pigeons = [];
+    this.pigeonDistAccum = 0;
+    this.nextPigeonGap = 150 + Math.random() * 110;
     this.initAwnings();
+    // Seed a couple welcoming sidewalk pigeons ahead of Hero right away
+    this.spawnPigeonFlock(135);
   }
 
   initAwnings() {
     this.awnings = [];
-    if (this.awningImgs.length === 0) return;
+    if (this.awningPool.length === 0) return;
     let y = -180;
     let prevIdx = -1;
-    while (y < CONFIG.HEIGHT + 160) {
-      let idx = Math.floor(Math.random() * this.awningImgs.length);
-      if (this.awningImgs.length > 1 && idx === prevIdx) {
-        idx = (idx + 1) % this.awningImgs.length;
+    while (y < CONFIG.HEIGHT + 180) {
+      let idx = Math.floor(Math.random() * this.awningPool.length);
+      if (this.awningPool.length > 1 && idx === prevIdx) {
+        idx = (idx + 1) % this.awningPool.length;
       }
       prevIdx = idx;
-      const img = this.awningImgs[idx];
-      this.awnings.push({ img, y, idx });
-      y += img.height + 55 + Math.random() * 85;
+      const sprite = this.awningPool[idx];
+      this.awnings.push({ sprite, y, idx });
+      y += sprite.height + 48 + Math.random() * 82;
     }
   }
 
-  addScorePopup(x, y, points, chainDepth) {
+  spawnPigeonFlock(baseY = -22) {
+    const count = Math.random() < 0.45 ? 1 : (Math.random() < 0.7 ? 2 : 3);
+    const centerX = CONFIG.CURB_X + 36 + Math.random() * (CONFIG.WIDTH - CONFIG.CURB_X - 88);
+    for (let i = 0; i < count; i++) {
+      const px = Math.max(
+        CONFIG.CURB_X + 16,
+        Math.min(CONFIG.WIDTH - 46, centerX + (Math.random() - 0.5) * 44)
+      );
+      const py = baseY + (Math.random() - 0.5) * 28;
+      this.pigeons.push({
+        x: px,
+        y: py,
+        facing: Math.random() < 0.5 ? -1 : 1,
+        state: 'ground', // 'ground' | 'flying'
+        peckTimer: Math.random() * 2.2,
+        isPecking: false,
+        vx: 0,
+        vy: 0,
+        altitude: 0,
+        flapPhase: Math.random() * 4,
+      });
+    }
+  }
+
+  addReactionPopup(x, y, text, isRare = false, chainDepth = 1) {
     this.popups.push({
-      x: x + (Math.random() - 0.5) * 8,
+      x: x + (Math.random() - 0.5) * 10,
       y,
-      points,
+      text,
+      isRare,
       chainDepth,
       life: 0,
-      maxLife: 0.72,
+      maxLife: isRare ? 1.35 : 0.74,
     });
   }
 
+  /**
+   * Updates awnings, sidewalk pigeons, skid marks, and reaction popups.
+   * Returns { pigeonStartled: boolean } so main can trigger subtle flutter SFX.
+   */
   updateEffects(dt, sim) {
     const deltaDist = Math.max(0, sim.distance - this.lastDistance);
     this.lastDistance = sim.distance;
+    let pigeonStartled = false;
 
-    // Scroll awnings locked directly to Hero's travel distance (User Answer #4)
+    // 1. Scroll procedural awnings locked directly to Hero's travel distance
     if (this.awnings.length > 0 && deltaDist > 0) {
       let topMostY = Infinity;
       for (const aw of this.awnings) {
         aw.y += deltaDist;
         if (aw.y < topMostY) topMostY = aw.y;
       }
-      // Recycle awnings that scrolled past bottom back above the top edge
       for (const aw of this.awnings) {
         if (aw.y > CONFIG.HEIGHT + 40) {
-          const nextIdx = Math.floor(Math.random() * this.awningImgs.length);
-          aw.img = this.awningImgs[nextIdx];
+          const nextIdx = Math.floor(Math.random() * this.awningPool.length);
+          aw.sprite = this.awningPool[nextIdx];
           aw.idx = nextIdx;
-          const gap = 55 + Math.random() * 90;
-          aw.y = topMostY - aw.img.height - gap;
+          const gap = 48 + Math.random() * 88;
+          aw.y = topMostY - aw.sprite.height - gap;
           topMostY = aw.y;
         }
       }
     }
 
-    // Subtle shoe-brake skid marks on sidewalk while Hero is slowing down
+    // 2. Spawn & update NYC sidewalk pigeons
+    if (deltaDist > 0) {
+      this.pigeonDistAccum += deltaDist;
+      if (this.pigeonDistAccum >= this.nextPigeonGap && this.pigeons.length < 10) {
+        this.pigeonDistAccum = 0;
+        this.nextPigeonGap = 240 + Math.random() * 240;
+        this.spawnPigeonFlock(-24);
+      }
+    }
+
+    const scareRadius = 62;
+    const scareRadiusSq = scareRadius * scareRadius;
+
+    for (const p of this.pigeons) {
+      if (p.state === 'ground') {
+        p.y += deltaDist;
+        // Idle pecking animation
+        p.peckTimer -= dt;
+        if (p.peckTimer <= 0) {
+          p.isPecking = !p.isPecking;
+          p.peckTimer = p.isPecking ? (0.16 + Math.random() * 0.22) : (0.55 + Math.random() * 1.4);
+          if (!p.isPecking && Math.random() < 0.25) {
+            p.facing *= -1;
+          }
+        }
+
+        // Check if Hero or any Pedestrian is close enough to startle this pigeon!
+        let threatX = null;
+        let threatY = null;
+        const hdx = p.x - sim.hero.x;
+        const hdy = p.y - sim.hero.y;
+        if (hdx * hdx + hdy * hdy < scareRadiusSq) {
+          threatX = sim.hero.x;
+          threatY = sim.hero.y;
+        } else {
+          for (const ped of sim.pedestrians) {
+            const pdx = p.x - ped.x;
+            const pdy = p.y - ped.y;
+            if (pdx * pdx + pdy * pdy < scareRadiusSq) {
+              threatX = ped.x;
+              threatY = ped.y;
+              break;
+            }
+          }
+        }
+
+        // Nearby startled pigeon also spooks flockmates!
+        if (threatX === null) {
+          for (const other of this.pigeons) {
+            if (other !== p && other.state === 'flying' && other.altitude < 18) {
+              const odx = p.x - other.x;
+              const ody = p.y - other.y;
+              if (odx * odx + ody * ody < 46 * 46) {
+                threatX = p.x - other.vx * 0.1;
+                threatY = p.y + 20;
+                break;
+              }
+            }
+          }
+        }
+
+        if (threatX !== null) {
+          p.state = 'flying';
+          pigeonStartled = true;
+          const awayX = p.x - threatX;
+          const flyDir = Math.abs(awayX) > 4 ? Math.sign(awayX) : (p.x < CONFIG.WIDTH * 0.5 ? -1 : 1);
+          p.facing = flyDir;
+          p.vx = flyDir * (125 + Math.random() * 75);
+          p.vy = -(75 + Math.random() * 85);
+          p.altitude = 1;
+        }
+      } else {
+        // Flying away: climb into the sky, flap rapidly, dart off-screen
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.altitude += 52 * dt;
+        p.flapPhase += dt * 18;
+      }
+    }
+
+    this.pigeons = this.pigeons.filter(
+      (p) => p.x > -60 && p.x < CONFIG.WIDTH + 60 && p.y > -80 && p.y < CONFIG.HEIGHT + 70
+    );
+
+    // 3. Subtle shoe-brake skid marks on pavement while Hero is slowing down
     if (sim.hero.isSlowing) {
       this.skidTimer += dt;
       if (this.skidTimer >= 0.04) {
@@ -268,12 +384,14 @@ export class GameRenderer {
     }
     this.skidMarks = this.skidMarks.filter((sk) => sk.life < sk.maxLife);
 
-    // Floating score popups
+    // 4. Floating comic reaction popups
     for (const p of this.popups) {
-      p.y -= 34 * dt;
+      p.y -= (p.isRare ? 22 : 34) * dt;
       p.life += dt;
     }
     this.popups = this.popups.filter((p) => p.life < p.maxLife);
+
+    return { pigeonStartled };
   }
 
   render(sim, timeSec) {
@@ -281,7 +399,7 @@ export class GameRenderer {
     ctx.save();
     ctx.scale(this.dpr, this.dpr);
 
-    // 1. Scrolling Sidewalk + Left Curb
+    // 1. Scrolling Procedural Sidewalk + Left Curb
     this.drawSidewalk(ctx, sim.distance);
 
     // 2. Subtle center recovery guide when Hero has been pushed up
@@ -292,13 +410,10 @@ export class GameRenderer {
     // 3. Brake skid marks on pavement
     this.drawSkidMarks(ctx);
 
-    // 4. Chain highlight links under feet (Hero -> Ped -> Ped)
-    this.drawChainLinks(ctx, sim);
+    // 4. Grounded sidewalk pigeons (drawn beneath characters)
+    this.drawPigeons(ctx, 'ground');
 
-    // 5. Hero subtle locator ring (intensifies & pulses while slowing down)
-    this.drawHeroRing(ctx, sim.hero, timeSec);
-
-    // 6. Y-sorted entities (Hero + Pedestrians)
+    // 5. Y-sorted entities (Hero + Pedestrians — NO underfoot indicator circles!)
     const entities = [{ type: 'hero', y: sim.hero.y, obj: sim.hero }];
     for (const ped of sim.pedestrians) {
       entities.push({ type: 'ped', y: ped.y, obj: ped });
@@ -313,18 +428,21 @@ export class GameRenderer {
       }
     }
 
-    // 7. Overhead right-side storefront awnings (characters pass underneath)
+    // 6. Overhead right-side storefront awnings (characters pass underneath)
     this.drawAwnings(ctx);
 
-    // 7b. Optional debug hitbox outlines (shows exact rounded-bottom Hero & rounded-top Ped boxes)
+    // 7. Flying pigeons soaring above characters & awnings!
+    this.drawPigeons(ctx, 'flying');
+
+    // 8. Optional debug hitbox outlines (toggled from Physics Tuning)
     if (CONFIG.DEBUG.SHOW_HITBOXES) {
       this.drawHitboxes(ctx, sim);
     }
 
-    // 8. Floating score popups (drawn above awnings for legibility)
+    // 9. Floating comic reaction popups (!, censored cuss words, "I'M WALKIN' HERE!")
     this.drawPopups(ctx);
 
-    // 9. Top danger-zone glow when Hero is close to being pushed off the top
+    // 10. Top danger-zone glow when Hero is close to being pushed off the top
     if (sim.hero.y < CONFIG.HERO.DANGER_Y) {
       this.drawDangerGlow(ctx, sim.hero.y, timeSec);
     }
@@ -355,55 +473,52 @@ export class GameRenderer {
 
   drawSkidMarks(ctx) {
     for (const sk of this.skidMarks) {
-      const alpha = (1 - sk.life / sk.maxLife) * 0.25;
+      const alpha = (1 - sk.life / sk.maxLife) * 0.22;
       ctx.fillStyle = `rgba(30, 40, 48, ${alpha})`;
       ctx.fillRect(sk.x - 6, sk.y, 3, 6);
       ctx.fillRect(sk.x + 3, sk.y, 3, 6);
     }
   }
 
-  drawHeroRing(ctx, hero, timeSec) {
-    ctx.save();
-    const blend = hero.slowBlend || 0;
-    if (blend > 0.02) {
-      const pulse = 1 + Math.sin(timeSec * 20) * 0.07 * blend;
-      const rx = (20.5 + 3.5 * blend) * pulse;
-      const ry = (8.2 + 1.6 * blend) * pulse;
-      ctx.strokeStyle = `rgba(34, 211, 238, ${0.55 + 0.37 * blend})`;
-      ctx.fillStyle = `rgba(34, 211, 238, ${0.22 * blend})`;
-      ctx.lineWidth = 1.6 + 0.8 * blend;
-      ctx.beginPath();
-      ctx.ellipse(hero.x, hero.y + 22, rx, ry, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    } else {
-      // Subtle always-on player ring so Hero stays effortless to track in dense crowds
-      ctx.strokeStyle = 'rgba(34, 211, 238, 0.55)';
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.ellipse(hero.x, hero.y + 22, 20.5, 8.2, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
+  drawPigeons(ctx, targetState) {
+    for (const p of this.pigeons) {
+      if (p.state !== targetState) continue;
 
-  drawChainLinks(ctx, sim) {
-    const impeded = sim.pedestrians.filter((p) => p.isImpededByHero);
-    if (impeded.length === 0) return;
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
 
-    ctx.save();
-    for (const ped of impeded) {
-      // Golden glow ring under feet showing this Pedestrian is actively scoring!
-      const isChain = ped.chainDepth > 1;
-      ctx.fillStyle = isChain ? 'rgba(255, 168, 38, 0.24)' : 'rgba(250, 204, 21, 0.22)';
-      ctx.strokeStyle = isChain ? 'rgba(249, 115, 22, 0.92)' : 'rgba(234, 179, 8, 0.9)';
-      ctx.lineWidth = isChain ? 2.2 : 1.8;
-      ctx.beginPath();
-      ctx.ellipse(ped.x, ped.y + 22.5, 20.5, 8.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      if (p.state === 'ground') {
+        // Soft 20% ground shadow
+        ctx.fillStyle = 'rgba(18, 20, 24, 0.20)';
+        ctx.beginPath();
+        ctx.ellipse(p.x, p.y + 6, 8, 2.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        const sprite = p.isPecking ? this.pigeonSprites.peck : this.pigeonSprites.idle;
+        ctx.translate(p.x, p.y);
+        ctx.scale(p.facing, 1);
+        ctx.drawImage(sprite, -12, -14, 24, 24);
+      } else {
+        // Shadow stays lower on the pavement & fades out as pigeon climbs!
+        const shadowAlpha = Math.max(0, 0.20 * (1 - p.altitude / 90));
+        if (shadowAlpha > 0.01) {
+          ctx.fillStyle = `rgba(18, 20, 24, ${shadowAlpha})`;
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y + 8 + p.altitude * 0.6, 7.5, 2.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        const frames = this.pigeonSprites.fly;
+        const sprite = frames[Math.floor(p.flapPhase) % frames.length];
+        const liftScale = 1 + Math.min(0.45, p.altitude / 120);
+        ctx.translate(p.x, p.y - p.altitude * 0.35);
+        ctx.scale(p.facing * liftScale, liftScale);
+        ctx.drawImage(sprite, -13, -13, 26, 26);
+      }
+
+      ctx.restore();
     }
-    ctx.restore();
   }
 
   drawHero(ctx, hero) {
@@ -413,7 +528,6 @@ export class GameRenderer {
     const sprite = this.heroFrames[frameIdx] || this.heroFrames[0];
 
     ctx.save();
-    // Slight lean when steering horizontally or smoothly bracing during slow-down
     const lean = (hero.vx / CONFIG.HERO.LATERAL_SPEED) * 0.08;
     const blend = hero.slowBlend || 0;
     const squashY = 1.0 - 0.05 * blend;
@@ -426,7 +540,6 @@ export class GameRenderer {
     ctx.imageSmoothingQuality = 'high';
 
     if (sprite) {
-      // Anchor sprite center slightly above feet so rounded hitbox sits cleanly on body
       ctx.drawImage(sprite, -w / 2, -h / 2 - 4, w, h);
     } else {
       ctx.fillStyle = '#4ea1b8';
@@ -443,37 +556,21 @@ export class GameRenderer {
     const sprite = frames[frameIdx];
 
     ctx.save();
-    // Tiny irritated wiggle when actively stuck in Hero's traffic jam
-    const wiggle = ped.isImpededByHero ? Math.sin(timeSec * 28 + ped.id) * 0.045 : 0;
+    const wiggle = ped.isImpededByHero ? Math.sin(timeSec * 28 + ped.id) * 0.04 : 0;
     const lean = Math.max(-0.08, Math.min(0.08, (ped.vx / 45) * 0.05)) + wiggle;
 
     ctx.translate(ped.x, ped.y);
     ctx.rotate(lean);
-    // High-quality smoothing over our bicubic-resampled 35x54 sprites matches Hero's soft pixel edges
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(sprite, -w / 2, -h / 2 - 4, w, h);
-
-    // Subtle frustration mark above head ONLY when impeded by Hero (visualizing scoring rule!)
-    if (ped.isImpededByHero) {
-      const bob = Math.sin(timeSec * 14 + ped.id) * 1.6;
-      const badge = ped.chainDepth > 1 ? '!!' : '!';
-      ctx.font = '400 13px "Geist Pixel", monospace';
-      ctx.textAlign = 'center';
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(20, 20, 24, 0.85)';
-      ctx.strokeText(badge, 0, -h / 2 - 6 + bob);
-      ctx.fillStyle = ped.chainDepth > 1 ? '#fb923c' : '#facc15';
-      ctx.fillText(badge, 0, -h / 2 - 6 + bob);
-    }
-
     ctx.restore();
   }
 
   drawAwnings(ctx) {
     for (const aw of this.awnings) {
-      const x = CONFIG.WIDTH - aw.img.width;
-      ctx.drawImage(aw.img, x, aw.y);
+      const x = CONFIG.WIDTH - aw.sprite.width;
+      ctx.drawImage(aw.sprite.canvas, x, aw.y, aw.sprite.width, aw.sprite.height);
     }
   }
 
@@ -502,7 +599,6 @@ export class GameRenderer {
     ctx.save();
     ctx.lineWidth = 1.6;
 
-    // Hero rounded-bottom hitbox
     const h = sim.hero;
     this.drawRoundedCornerBox(ctx, h.x, h.y, h.hw, h.hh, h.rTop, h.rBot);
     ctx.fillStyle = 'rgba(34, 211, 238, 0.16)';
@@ -510,7 +606,6 @@ export class GameRenderer {
     ctx.fill();
     ctx.stroke();
 
-    // Pedestrians rounded-top hitboxes
     for (const p of sim.pedestrians) {
       this.drawRoundedCornerBox(ctx, p.x, p.y, p.hw, p.hh, p.rTop, p.rBot);
       ctx.fillStyle = p.isImpededByHero
@@ -531,17 +626,28 @@ export class GameRenderer {
     ctx.textAlign = 'center';
     for (const p of this.popups) {
       const t = p.life / p.maxLife;
-      const alpha = t < 0.2 ? t / 0.2 : 1 - (t - 0.2) / 0.8;
+      const alpha = t < 0.16 ? t / 0.16 : 1 - (t - 0.16) / 0.84;
       ctx.globalAlpha = Math.max(0, alpha);
-      ctx.font = p.chainDepth > 1
-        ? '400 14px "Geist Pixel", monospace'
-        : '400 13px "Geist Pixel", monospace';
-      const label = `+${p.points}`;
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.strokeText(label, p.x, p.y);
-      ctx.fillStyle = p.chainDepth > 1 ? '#fb923c' : '#fde047';
-      ctx.fillText(label, p.x, p.y);
+
+      const fontSize = p.isRare ? 13 : (p.text.length > 2 ? 12 : 14);
+      ctx.font = `400 ${fontSize}px "Geist Pixel", monospace`;
+
+      // Keep wide reactions like "I'M WALKIN' HERE!" cleanly inside the screen edges
+      const halfW = ctx.measureText(p.text).width / 2 + 8;
+      const drawX = Math.max(halfW, Math.min(CONFIG.WIDTH - halfW, p.x));
+
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = 'rgba(15, 23, 42, 0.92)';
+      ctx.strokeText(p.text, drawX, p.y);
+
+      if (p.isRare) {
+        ctx.fillStyle = '#fde047';
+      } else if (p.text === '!' || p.text === '!!') {
+        ctx.fillStyle = p.chainDepth > 1 ? '#fb923c' : '#facc15';
+      } else {
+        ctx.fillStyle = '#f87171'; // Punchy comic red-coral for censored cuss words
+      }
+      ctx.fillText(p.text, drawX, p.y);
     }
     ctx.restore();
   }
