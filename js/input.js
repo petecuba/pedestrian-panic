@@ -5,6 +5,8 @@
  *  - Tilt: DeviceOrientationEvent (gamma) for mobile/iOS steering
  *  - Press: Pointer/Touch hold on the game canvas to slow down
  */
+import { CONFIG } from './config.js';
+
 export class InputManager {
   constructor(canvasElement) {
     this.canvas = canvasElement;
@@ -130,7 +132,8 @@ export class InputManager {
       this.tiltAxis = 0;
     } else {
       const sign = Math.sign(rel);
-      const norm = Math.min(1, (Math.abs(rel) - deadzone) / (maxAngle - deadzone));
+      const sens = CONFIG.INPUT.TILT_SENSITIVITY || 1.0;
+      const norm = Math.min(1, ((Math.abs(rel) - deadzone) / (maxAngle - deadzone)) * sens);
       // Progressive curve matching iOS: fine precision at gentle tilts, snappy across-lane speed at steeper tilts
       const accelCurve = Math.min(1, norm * (0.65 + norm * 0.85));
       this.tiltAxis = sign * accelCurve;

@@ -1,7 +1,7 @@
 /**
- * Pedestrian Panic — Main Controller & Game Loop
+ * Pedestrian Panic — Main Controller, Game Loop & Live Physics Tuning UI
  */
-import { CONFIG } from './config.js';
+import { CONFIG, DEFAULT_TUNING, applyTuningToConfig } from './config.js';
 import { GameSimulation } from './physics.js';
 import { GameRenderer } from './renderer.js';
 import { InputManager } from './input.js';
@@ -9,16 +9,22 @@ import { SoundEngine } from './sound.js';
 import { PEDESTRIAN_VARIANT_COUNT } from './pedestrianArt.js';
 
 const HIGH_SCORE_KEY = 'pedestrian_panic_high_score_v1';
+const TUNING_KEY = 'pedestrian_panic_tuning_v1';
 
 const canvas = document.getElementById('game-canvas');
 const splashOverlay = document.getElementById('splash-screen');
 const endOverlay = document.getElementById('end-screen');
+const tuneOverlay = document.getElementById('tune-overlay');
 const hudEl = document.getElementById('hud');
 
 const scoreEl = document.getElementById('hud-score');
 const chainBadgeEl = document.getElementById('hud-chain');
 const brakePillEl = document.getElementById('hud-brake');
 const muteBtn = document.getElementById('mute-btn');
+const tuneBtn = document.getElementById('tune-btn');
+const resumeBtn = document.getElementById('resume-btn');
+const tuneResetBtn = document.getElementById('tune-reset-btn');
+const tuneCopyBtn = document.getElementById('tune-copy-btn');
 
 const startBtn = document.getElementById('start-btn');
 const tiltBtn = document.getElementById('tilt-btn');
@@ -32,20 +38,138 @@ const statBlockedEl = document.getElementById('stat-blocked');
 const statChainEl = document.getElementById('stat-chain');
 const statTimeEl = document.getElementById('stat-time');
 const newBestBadgeEl = document.getElementById('new-best-badge');
-
-// Hero preview sprites on splash screen
 const splashCastEl = document.getElementById('splash-cast');
+
+// Load any saved tuning tweaks before constructing simulation
+let tuning = loadSavedTuning();
+applyTuningToConfig(tuning);
 
 const sim = new GameSimulation(PEDESTRIAN_VARIANT_COUNT);
 const renderer = new GameRenderer(canvas);
 const input = new InputManager(canvas);
 const sound = new SoundEngine();
 
-let state = 'splash'; // 'splash' | 'playing' | 'gameover'
+let state = 'splash'; // 'splash' | 'playing' | 'paused' | 'gameover'
 let highScore = Number(localStorage.getItem(HIGH_SCORE_KEY) || 0);
 let lastFrameTime = performance.now();
 let accumulator = 0;
 let gameOverAt = 0;
+
+function loadSavedTuning() {
+  try {
+    const raw = localStorage.getItem(TUNING_KEY);
+    if (!raw) return { ...DEFAULT_TUNING };
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_TUNING, ...parsed };
+  } catch {
+    return { ...DEFAULT_TUNING };
+  }
+}
+
+function saveTuning() {
+  try {
+    localStorage.setItem(TUNING_KEY, JSON.stringify(tuning));
+  } catch {
+    // Ignore storage quota errors in private browsing
+  }
+}
+
+const SLIDER_SPECS = [
+  { key: 'heroCornerR', fmt: (v) => `${Number(v).toFixed(1)} px` },
+  { key: 'heroSlowLength', fmt: (v) => `${Number(v).toFixed(2)} s` },
+  { key: 'heroSlowCooldown', fmt: (v) => `${Number(v).toFixed(2)} s` },
+  { key: 'heroSlowPower', fmt: (v) => `${Math.round(v)}` },
+  { key: 'heroSlowRecover', fmt: (v) => `${Math.round(v)} px/s` },
+  { key: 'heroWeight', fmt: (v) => `${Math.round(v)}` },
+  { key: 'heroFriction', fmt: (v) => `${Number(v).toFixed(2)}` },
+  { key: 'pedCornerR', fmt: (v) => `${Number(v).toFixed(1)} px` },
+  { key: 'pedVelocity', fmt: (v) => `${Number(v).toFixed(2)}x` },
+  { key: 'pedWeight', fmt: (v) => `${Math.round(v)}` },
+  { key: 'pedForce', fmt: (v) => `${Number(v).toFixed(2)}x` },
+  { key: 'pedFriction', fmt: (v) => `${Number(v).toFixed(2)}` },
+  { key: 'tiltSensitivity', fmt: (v) => `${Number(v).toFixed(1)}x` },
+  { key: 'spawnRate', fmt: (v) => `${Number(v).toFixed(2)}x` },
+];
+
+function syncTuningUI() {
+  for (const spec of SLIDER_SPECS) {
+    const el = document.getElementById(`tune-${spec.key}`);
+    const out = document.getElementById(`val-${spec.key}`);
+    if (el) el.value = String(tuning[spec.key]);
+    if (out) out.textContent = spec.fmt(tuning[spec.key]);
+  }
+  const hbEl = document.getElementById('tune-showHitboxes');
+  if (hbEl) hbEl.checked = Boolean(tuning.showHitboxes);
+}
+
+function initTuningControls() {
+  syncTuningUI();
+
+  for (const spec of SLIDER_SPECS) {
+    const el = document.getElementById(`tune-${spec.key}`);
+    const out = document.getElementById(`val-${spec.key}`);
+    if (!el) continue;
+    el.addEventListener('input', () => {
+      const val = Number(el.value);
+      tuning[spec.key] = val;
+      if (out) out.textContent = spec.fmt(val);
+      applyTuningToConfig(tuning);
+      sim.syncLiveConfig();
+      saveTuning();
+    });
+  }
+
+  const hbEl = document.getElementById('tune-showHitboxes');
+  if (hbEl) {
+    hbEl.addEventListener('change', () => {
+      tuning.showHitboxes = hbEl.checked;
+      applyTuningToConfig(tuning);
+      saveTuning();
+    });
+  }
+
+  tuneResetBtn.addEventListener('click', () => {
+    tuning = { ...DEFAULT_TUNING };
+    applyTuningToConfig(tuning);
+    sim.syncLiveConfig();
+    syncTuningUI();
+    saveTuning();
+  });
+
+  tuneCopyBtn.addEventListener('click', async () => {
+    const payload = JSON.stringify(tuning, null, 2);
+    try {
+      await navigator.clipboard.writeText(payload);
+      tuneCopyBtn.textContent = 'Copied!';
+    } catch {
+      // Fallback prompt if clipboard API is unavailable on non-focused mobile sheet
+      window.prompt('Copy your tuned values:', payload);
+      tuneCopyBtn.textContent = 'Shown';
+    }
+    setTimeout(() => {
+      tuneCopyBtn.textContent = 'Copy Values';
+    }, 1500);
+  });
+}
+
+function openTuning() {
+  if (state !== 'playing') return;
+  state = 'paused';
+  input.resetSlowLatchState();
+  syncTuningUI();
+  tuneOverlay.classList.remove('hidden');
+  tuneBtn.classList.add('hidden');
+}
+
+function closeTuning() {
+  if (state !== 'paused') return;
+  tuneOverlay.classList.add('hidden');
+  tuneBtn.classList.remove('hidden');
+  input.resetSlowLatchState();
+  lastFrameTime = performance.now();
+  accumulator = 0;
+  state = 'playing';
+}
 
 function updateBestDisplay() {
   if (highScore > 0) {
@@ -59,7 +183,6 @@ function updateBestDisplay() {
 function populateSplashCast() {
   if (!splashCastEl) return;
   splashCastEl.innerHTML = '';
-  // Show a few procedural pedestrian sprites alongside Hero on the splash card
   const sampleIndices = [0, 3, 5, 1];
   const leftPeds = sampleIndices.slice(0, 2);
   const rightPeds = sampleIndices.slice(2);
@@ -87,6 +210,7 @@ function populateSplashCast() {
 
 function startGame() {
   sound.unlock();
+  applyTuningToConfig(tuning);
   sim.reset();
   renderer.resetEffects();
   input.resetSlowLatchState();
@@ -94,9 +218,12 @@ function startGame() {
 
   state = 'playing';
   accumulator = 0;
+  lastFrameTime = performance.now();
   splashOverlay.classList.add('hidden');
   endOverlay.classList.add('hidden');
+  tuneOverlay.classList.add('hidden');
   hudEl.classList.remove('hidden');
+  tuneBtn.classList.remove('hidden');
   updateHud();
 }
 
@@ -104,6 +231,8 @@ function showGameOver() {
   state = 'gameover';
   gameOverAt = performance.now();
   hudEl.classList.add('hidden');
+  tuneBtn.classList.add('hidden');
+  tuneOverlay.classList.add('hidden');
 
   const finalPts = Math.round(sim.score);
   const isNewBest = finalPts > highScore && finalPts > 0;
@@ -134,7 +263,6 @@ function updateHud() {
     chainBadgeEl.classList.remove('active', 'mega');
   }
 
-  // Brake state pill (no recharge meter per user spec — crisp state label only)
   if (sim.hero.isSlowing) {
     brakePillEl.textContent = 'SLOWING';
     brakePillEl.dataset.state = 'slowing';
@@ -192,24 +320,28 @@ function loop(now) {
     }
     updateHud();
   } else if (state === 'splash') {
-    // Gentle idle stroll on splash background so the sidewalk feels alive
     sim.distance += CONFIG.HERO.BASE_SPEED * 0.55 * frameDt;
     sim.hero.walkPhase += frameDt * 5.5;
     renderer.updateEffects(frameDt, sim);
   }
+  // When state === 'paused', simulation is frozen while canvas still renders live hitbox updates
 
   renderer.render(sim, timeSec);
   requestAnimationFrame(loop);
 }
 
 // Button & keyboard wiring
-startBtn.addEventListener('click', () => {
-  startGame();
+startBtn.addEventListener('click', () => startGame());
+restartBtn.addEventListener('click', () => startGame());
+
+// Prevent tapping Tune button from triggering canvas press-to-slow-down
+tuneBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+tuneBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  openTuning();
 });
 
-restartBtn.addEventListener('click', () => {
-  startGame();
-});
+resumeBtn.addEventListener('click', () => closeTuning());
 
 tiltBtn.addEventListener('click', async () => {
   sound.unlock();
@@ -221,6 +353,7 @@ tiltBtn.addEventListener('click', async () => {
   }
 });
 
+muteBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
 muteBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   sound.unlock();
@@ -232,11 +365,21 @@ muteBtn.addEventListener('click', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' || e.code === 'KeyP') {
+    if (state === 'playing') {
+      e.preventDefault();
+      openTuning();
+    } else if (state === 'paused') {
+      e.preventDefault();
+      closeTuning();
+    }
+    return;
+  }
+
   if (state === 'splash' && (e.code === 'Enter' || e.code === 'Space')) {
     e.preventDefault();
     startGame();
   } else if (state === 'gameover' && (e.code === 'Enter' || e.code === 'Space')) {
-    // Guard against accidentally restarting immediately while holding Space at death
     if (performance.now() - gameOverAt > 550) {
       e.preventDefault();
       startGame();
@@ -248,11 +391,11 @@ window.addEventListener('resize', () => {
   renderer.resize();
 });
 
-// Initialize assets and start render loop
+// Initialize
+initTuningControls();
 updateBestDisplay();
 populateSplashCast();
 
-// Show Tilt button on mobile/touch devices or when DeviceOrientation exists
 if (!input.tiltSupported) {
   tiltBtn.hidden = true;
 }

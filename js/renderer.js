@@ -195,6 +195,11 @@ export class GameRenderer {
     // 7. Overhead right-side storefront awnings (characters pass underneath)
     this.drawAwnings(ctx);
 
+    // 7b. Optional debug hitbox outlines (shows exact rounded-bottom Hero & rounded-top Ped boxes)
+    if (CONFIG.DEBUG.SHOW_HITBOXES) {
+      this.drawHitboxes(ctx, sim);
+    }
+
     // 8. Floating score popups (drawn above awnings for legibility)
     this.drawPopups(ctx);
 
@@ -367,6 +372,55 @@ export class GameRenderer {
       const x = CONFIG.WIDTH - aw.img.width;
       ctx.drawImage(aw.img, x, aw.y);
     }
+  }
+
+  drawRoundedCornerBox(ctx, x, y, hw, hh, rTop, rBot) {
+    const left = x - hw;
+    const right = x + hw;
+    const top = y - hh;
+    const bottom = y + hh;
+    const rt = Math.min(rTop, hw, hh);
+    const rb = Math.min(rBot, hw, hh);
+
+    ctx.beginPath();
+    ctx.moveTo(left + rt, top);
+    ctx.lineTo(right - rt, top);
+    ctx.arcTo(right, top, right, top + rt, rt);
+    ctx.lineTo(right, bottom - rb);
+    ctx.arcTo(right, bottom, right - rb, bottom, rb);
+    ctx.lineTo(left + rb, bottom);
+    ctx.arcTo(left, bottom, left, bottom - rb, rb);
+    ctx.lineTo(left, top + rt);
+    ctx.arcTo(left, top, left + rt, top, rt);
+    ctx.closePath();
+  }
+
+  drawHitboxes(ctx, sim) {
+    ctx.save();
+    ctx.lineWidth = 1.6;
+
+    // Hero rounded-bottom hitbox
+    const h = sim.hero;
+    this.drawRoundedCornerBox(ctx, h.x, h.y, h.hw, h.hh, h.rTop, h.rBot);
+    ctx.fillStyle = 'rgba(34, 211, 238, 0.16)';
+    ctx.strokeStyle = 'rgba(34, 211, 238, 0.95)';
+    ctx.fill();
+    ctx.stroke();
+
+    // Pedestrians rounded-top hitboxes
+    for (const p of sim.pedestrians) {
+      this.drawRoundedCornerBox(ctx, p.x, p.y, p.hw, p.hh, p.rTop, p.rBot);
+      ctx.fillStyle = p.isImpededByHero
+        ? 'rgba(250, 204, 21, 0.18)'
+        : 'rgba(255, 255, 255, 0.10)';
+      ctx.strokeStyle = p.isImpededByHero
+        ? 'rgba(250, 204, 21, 0.95)'
+        : 'rgba(255, 255, 255, 0.78)';
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
   drawPopups(ctx) {

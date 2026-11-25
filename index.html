@@ -36,6 +36,126 @@
         </div>
       </div>
 
+      <!-- Bottom-Left Tune / Pause Button (visible during gameplay) -->
+      <button id="tune-btn" class="tune-fab hidden" type="button" aria-label="Pause and tune physics">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="4" y1="6" x2="20" y2="6"></line>
+          <circle cx="9" cy="6" r="2.2" fill="currentColor"></circle>
+          <line x1="4" y1="12" x2="20" y2="12"></line>
+          <circle cx="15" cy="12" r="2.2" fill="currentColor"></circle>
+          <line x1="4" y1="18" x2="20" y2="18"></line>
+          <circle cx="11" cy="18" r="2.2" fill="currentColor"></circle>
+        </svg>
+        <span>Tune</span>
+      </button>
+
+      <!-- Pause & Physics Tuning Overlay -->
+      <div id="tune-overlay" class="overlay tune-overlay hidden" role="dialog" aria-label="Physics Tuning">
+        <div class="tune-sheet">
+          <div class="tune-header">
+            <div>
+              <div class="tune-kicker">Paused</div>
+              <h2>Physics Tuning</h2>
+            </div>
+            <button id="resume-btn" class="resume-btn" type="button">Resume</button>
+          </div>
+
+          <div class="tune-scroll">
+            <div class="tune-group">
+              <div class="tune-group-title">Hero</div>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Bottom Corner Radius</span><output id="val-heroCornerR"></output></div>
+                <input type="range" id="tune-heroCornerR" min="2" max="20" step="0.5" />
+              </label>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Slowdown Length</span><output id="val-heroSlowLength"></output></div>
+                <input type="range" id="tune-heroSlowLength" min="0.2" max="2.0" step="0.05" />
+              </label>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Slowdown Cooldown</span><output id="val-heroSlowCooldown"></output></div>
+                <input type="range" id="tune-heroSlowCooldown" min="0.1" max="2.0" step="0.05" />
+              </label>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Slowdown Power</span><output id="val-heroSlowPower"></output></div>
+                <input type="range" id="tune-heroSlowPower" min="100" max="600" step="10" />
+              </label>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Weight</span><output id="val-heroWeight"></output></div>
+                <input type="range" id="tune-heroWeight" min="50" max="300" step="5" />
+              </label>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Friction (Grip)</span><output id="val-heroFriction"></output></div>
+                <input type="range" id="tune-heroFriction" min="0" max="1" step="0.05" />
+              </label>
+            </div>
+
+            <div class="tune-group">
+              <div class="tune-group-title">Pedestrians</div>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Top Corner Radius</span><output id="val-pedCornerR"></output></div>
+                <input type="range" id="tune-pedCornerR" min="2" max="19" step="0.5" />
+              </label>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Walking Speed</span><output id="val-pedVelocity"></output></div>
+                <input type="range" id="tune-pedVelocity" min="0.5" max="2.0" step="0.05" />
+              </label>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Weight</span><output id="val-pedWeight"></output></div>
+                <input type="range" id="tune-pedWeight" min="60" max="200" step="2" />
+              </label>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Shove Force</span><output id="val-pedForce"></output></div>
+                <input type="range" id="tune-pedForce" min="0.3" max="2.5" step="0.05" />
+              </label>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Friction (Grip)</span><output id="val-pedFriction"></output></div>
+                <input type="range" id="tune-pedFriction" min="0" max="1" step="0.05" />
+              </label>
+            </div>
+
+            <div class="tune-group">
+              <div class="tune-group-title">Phone &amp; Crowd Extras</div>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Slowdown Recovery Speed</span><output id="val-heroSlowRecover"></output></div>
+                <input type="range" id="tune-heroSlowRecover" min="40" max="220" step="5" />
+              </label>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Tilt Sensitivity</span><output id="val-tiltSensitivity"></output></div>
+                <input type="range" id="tune-tiltSensitivity" min="0.5" max="2.5" step="0.1" />
+              </label>
+
+              <label class="slider-row">
+                <div class="slider-meta"><span>Spawn Rate</span><output id="val-spawnRate"></output></div>
+                <input type="range" id="tune-spawnRate" min="0.5" max="2.0" step="0.05" />
+              </label>
+
+              <label class="toggle-row">
+                <span>Show Hitboxes</span>
+                <input type="checkbox" id="tune-showHitboxes" />
+              </label>
+            </div>
+          </div>
+
+          <div class="tune-footer">
+            <button id="tune-reset-btn" class="tune-action-btn" type="button">Reset Defaults</button>
+            <button id="tune-copy-btn" class="tune-action-btn accent" type="button">Copy Values</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Splash Screen -->
       <div id="splash-screen" class="overlay">
         <div class="panel">

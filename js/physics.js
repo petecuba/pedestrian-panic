@@ -117,6 +117,25 @@ export class GameSimulation {
   }
 
   /**
+   * Sync live-tuned CONFIG values (corner radii, weights) onto active entities immediately
+   * so adjusting sliders in the pause drawer takes effect right away on resume.
+   */
+  syncLiveConfig() {
+    const H = CONFIG.HERO;
+    const P = CONFIG.PED;
+    this.hero.rBot = H.CORNER_R_BOT;
+    this.hero.rTop = H.CORNER_R_TOP;
+
+    const progress = clamp(this.elapsed / CONFIG.SPAWN.RAMP_DURATION, 0, 1);
+    for (const ped of this.pedestrians) {
+      ped.rTop = P.CORNER_R_TOP;
+      ped.rBot = P.CORNER_R_BOT;
+      // Preserve individual weight jitter while tracking updated WEIGHT_AVG
+      ped.pushPower = P.WEIGHT_AVG + (ped.weightOffset || 0) + progress * P.PUSH_POWER_RAMP;
+    }
+  }
+
+  /**
    * Builds exact BFS contact chain from Hero to Pedestrians behind Hero right now.
    * Returns Map<pedId, depth>.
    */
@@ -258,35 +277,27 @@ export class GameSimulation {
         totalCrowdWeight += ped.pushPower * depthWeight;
         pushingCount += 1;
         // Pedestrians cannot push Hero upward faster than their own walking speed!
-        const pedUpCap = ped.upwardSpeed + slowSpeedBonus * 0.45;
+        const pedUpCap = ped.upwardSpeed * P.SPEED_MULT + slowSpeedBonus * 0.45;
         if (pedUpCap > stackCapSpeed) stackCapSpeed = pedUpCap;
       }
     }
 
-    // 6. Unified smooth Hero vertical velocity (Points #3, #4, #5):
-    //    - Effective resistance mass = BASE_MASS (150) + SLOW_EXTRA_MASS (315) * slowEase.
-    //      At full brake (465): 1..4 pedestrians (~115..428) are held/pushed back,
-    //      while > 4 pedestrians (5+ => 525+) overpower Hero and push Hero forward!
-    //    - Upward push is strictly capped to stackCapSpeed so Hero NEVER detaches ahead of the crowd!
-    //    - When not in contact (pushingCount === 0), upward velocity damps out almost immediately!
+    // 6. Unified smooth Hero vertical velocity:
+    //    - Effective resistance mass = BASE_MASS + SLOW_EXTRA_MASS * slowEase.
+    //    - Upward push scales with net crowd weight & PED.FORCE_MULT, strictly capped to stackCapSpeed.
     const effectiveMass = H.BASE_MASS + H.SLOW_EXTRA_MASS * slowEase;
     const netCrowdForce = totalCrowdWeight - effectiveMass;
 
     let targetHeroVy = 0;
 
     if (pushingCount > 0 && netCrowdForce > 0) {
-      // Crowd overpowers Hero (2+ peds normally, or 5+ peds even while slowing down!)
-      // Scale smoothly from gentle creep at small netForce up to stackCapSpeed under heavy crowds
-      const crowdRatio = clamp(netCrowdForce / 240, 0, 1);
-      targetHeroVy = -stackCapSpeed * (0.25 + 0.75 * crowdRatio);
+      const crowdRatio = clamp((netCrowdForce * P.FORCE_MULT) / 240, 0, 1);
+      targetHeroVy = -stackCapSpeed * (0.22 + 0.78 * crowdRatio);
     } else if (slowEase > 0.001) {
-      // Slow Down is winning (0..4 peds): smoothly ease Hero back down toward center/brace Y!
       const targetDownY = pushingCount > 0 ? H.MAX_SLOW_Y : H.CENTER_Y;
       const distToTarget = targetDownY - hero.y;
       if (distToTarget > 0.5) {
-        // Gentle arrival ease so Hero glides smoothly into CENTER_Y without snapping
         const arrivalEase = clamp(distToTarget / 32, 0.12, 1.0);
-        // Crowd load naturally makes shoving 3-4 people back feel heavier than braking alone
         const loadDrag = pushingCount > 0
           ? clamp(1 - (totalCrowdWeight / (effectiveMass + 40)) * 0.72, 0.18, 1.0)
           : 1.0;
@@ -294,21 +305,14 @@ export class GameSimulation {
       }
     }
 
-    // Smoothly approach targetHeroVy:
-    // - Fast stop when losing upward contact (prevents ghost-bumping ahead of pedestrians!)
-    // - Smooth easing when braking in/out or accelerating under crowd weight
     if (pushingCount === 0 && hero.vy < 0) {
-      // Zero contact behind Hero: kill any leftover upward speed immediately
       hero.vy *= Math.exp(-H.NO_CONTACT_DAMP * dt);
       if (hero.vy > -0.5) hero.vy = 0;
     } else if (targetHeroVy < 0) {
-      // Being pushed upward by active contact
-      const blendRate = 10.0;
+      const blendRate = 10.0 * clamp(P.FORCE_MULT, 0.4, 2.5);
       hero.vy += (targetHeroVy - hero.vy) * Math.min(1, blendRate * dt);
-      // Hard safety cap so Hero can never outrun the pushing pedestrians
       if (hero.vy < -stackCapSpeed) hero.vy = -stackCapSpeed;
     } else {
-      // Smoothly easing into/out of downward slowdown recovery (or coming to rest)
       const easeRate = hero.isSlowing ? 11.0 : 9.0;
       hero.vy += (targetHeroVy - hero.vy) * Math.min(1, easeRate * dt);
       if (Math.abs(hero.vy) < 0.3 && targetHeroVy === 0) hero.vy = 0;
@@ -325,15 +329,16 @@ export class GameSimulation {
       ped.prevX = ped.x;
       ped.prevY = ped.y;
 
-      const intendedScreenUp = ped.upwardSpeed + slowSpeedBonus * 0.55;
+      const intendedScreenUp = ped.upwardSpeed * P.SPEED_MULT + slowSpeedBonus * 0.55;
       ped.intendedScreenUp = intendedScreenUp;
       ped.y -= intendedScreenUp * dt;
     }
 
-    // 8. Pure geometric slippery rounded-corner collision resolution (8 passes)
-    //    - Flat shelf contacts have nx = 0 -> Pedestrians lock behind Hero
-    //    - Rounded corner contacts have nx != 0 -> amplified by SLIP_BOOST for crisp slippery slide!
-    const slipBoost = P.SLIP_BOOST;
+    // 8. Pure geometric rounded-corner collision resolution (8 passes)
+    //    Friction maps 0 (super slippery, 1.85x corner glide) -> 1 (very grippy, 0.15x)
+    const heroPedFriction = clamp(0.55 * H.FRICTION + 0.45 * P.FRICTION, 0, 1);
+    const heroPedSlip = 1.85 - heroPedFriction * 1.70;
+    const pedPedSlip = 1.85 - clamp(P.FRICTION, 0, 1) * 1.70;
     const iterations = 8;
 
     for (let iter = 0; iter < iterations; iter++) {
@@ -343,21 +348,18 @@ export class GameSimulation {
         if (!hit) continue;
 
         if (hit.dy >= 0) {
-          // Pedestrian is behind Hero:
-          // Hero never jumps forward from geometric overlap (zero ghost-bump / zero speed-weight coupling)
-          const slideX = hit.nx * hit.pen * (Math.abs(hit.nx) > 0.01 ? slipBoost : 1.0);
+          const slideX = hit.nx * hit.pen * (Math.abs(hit.nx) > 0.01 ? heroPedSlip : 1.0);
           ped.x = clamp(ped.x + slideX, minPedX, maxPedX);
           ped.y += hit.ny * hit.pen;
         } else {
-          // Pedestrian already passed ahead of Hero: let them separate smoothly forward
-          const slideX = hit.nx * hit.pen * slipBoost;
+          const slideX = hit.nx * hit.pen * heroPedSlip;
           ped.x = clamp(ped.x + slideX * 0.92, minPedX, maxPedX);
           hero.x = clamp(hero.x - slideX * 0.08, minHeroX, maxHeroX);
           ped.y += hit.ny * hit.pen;
         }
       }
 
-      // 8b. Pedestrian vs Pedestrian (slippery rounded corners let crowds flow smoothly around edges)
+      // 8b. Pedestrian vs Pedestrian
       const n = this.pedestrians.length;
       for (let i = 0; i < n; i++) {
         const a = this.pedestrians[i];
@@ -366,11 +368,10 @@ export class GameSimulation {
           const hit = roundedBoxOverlap(a, b, 0);
           if (!hit) continue;
 
-          const sepX = hit.nx * hit.pen * 0.5 * (Math.abs(hit.nx) > 0.01 ? slipBoost : 1.0);
+          const sepX = hit.nx * hit.pen * 0.5 * (Math.abs(hit.nx) > 0.01 ? pedPedSlip : 1.0);
           a.x = clamp(a.x - sepX, minPedX, maxPedX);
           b.x = clamp(b.x + sepX, minPedX, maxPedX);
 
-          // Back pedestrian yields behind front pedestrian; propagates Hero's braking shove cleanly
           const frontYield = slowEase > 0.15 ? 0.0 : 0.05;
           const backYield = 1.0 - frontYield;
           if (a.y > b.y) {
@@ -485,7 +486,8 @@ export class GameSimulation {
 
   updateSpawning(dt) {
     const S = CONFIG.SPAWN;
-    this.spawnTimer -= dt;
+    const rate = Math.max(0.25, S.RATE_MULT || 1.0);
+    this.spawnTimer -= dt * rate;
     if (this.spawnTimer > 0) return;
 
     const progress = clamp(this.elapsed / S.RAMP_DURATION, 0, 1);
@@ -520,9 +522,8 @@ export class GameSimulation {
       }
     }
 
-    const scaledMin = P.PUSH_POWER_MIN + difficultyProgress * P.PUSH_POWER_RAMP;
-    const scaledMax = P.PUSH_POWER_MAX + difficultyProgress * P.PUSH_POWER_RAMP;
-    const pushPower = scaledMin + Math.random() * (scaledMax - scaledMin);
+    const weightOffset = (Math.random() * 2 - 1) * P.WEIGHT_SPREAD;
+    const pushPower = P.WEIGHT_AVG + weightOffset + difficultyProgress * P.PUSH_POWER_RAMP;
 
     const baseSpeed = P.MIN_REL_SPEED + Math.random() * (P.MAX_REL_SPEED - P.MIN_REL_SPEED);
     const variation = baseSpeed * ((Math.random() * 2 - 1) * P.SPEED_VARIATION);
@@ -539,6 +540,7 @@ export class GameSimulation {
       hh: P.HALF_H,
       rTop: P.CORNER_R_TOP,
       rBot: P.CORNER_R_BOT,
+      weightOffset,
       pushPower,
       upwardSpeed,
       intendedScreenUp: upwardSpeed,
