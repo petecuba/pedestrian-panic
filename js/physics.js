@@ -514,8 +514,12 @@ export class GameSimulation {
 
   updateSpawning(dt) {
     const S = CONFIG.SPAWN;
-    const rate = Math.max(0.25, S.RATE_MULT || 1.0);
-    this.spawnTimer -= dt * rate;
+    const baseRate = Math.max(0.25, S.RATE_MULT || 0.9);
+    // Escalate effective spawn rate continuously over time so the street gets progressively more crowded
+    const timeRamp = 1.0 + (this.elapsed / 32) * 0.72 + Math.pow(this.elapsed / 95, 1.35);
+    const effectiveRate = baseRate * Math.min(3.4, timeRamp);
+
+    this.spawnTimer -= dt * effectiveRate;
     if (this.spawnTimer > 0) return;
 
     const progress = clamp(this.elapsed / S.RAMP_DURATION, 0, 1);
@@ -526,9 +530,13 @@ export class GameSimulation {
 
     this.spawnOnePedestrian(progress);
 
+    // Increasing cluster & rush-hour wave chance as time goes on
     const clusterChance = S.CLUSTER_CHANCE_START + (S.CLUSTER_CHANCE_MAX - S.CLUSTER_CHANCE_START) * progress;
     if (Math.random() < clusterChance && this.pedestrians.length < S.MAX_ACTIVE) {
       this.spawnOnePedestrian(progress, 36 + Math.random() * 24);
+    }
+    if (this.elapsed > 35 && Math.random() < Math.min(0.4, (this.elapsed - 35) / 110) && this.pedestrians.length < S.MAX_ACTIVE) {
+      this.spawnOnePedestrian(progress, 72 + Math.random() * 28);
     }
   }
 

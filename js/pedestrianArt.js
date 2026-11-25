@@ -1,16 +1,17 @@
 /**
- * Pedestrian Panic — Procedural Bicubic Pixel-Art Pedestrian Generator
- *  - 32 distinct pedestrian archetypes (12 original + 20 new styles/accessories)
- *  - Easy modular skin, hair, clothing, pants & accent color palettes picked randomly
- *    so pedestrians never look repetitive on the sidewalk
- *  - Drawn at 44x68 (50% smaller pixel size vs. 22x34) with flat stepped colors
- *    and resampled with a separable Mitchell-Netravali bicubic filter (Photoshop-style
- *    soft pixel edges without smooth color gradients)
+ * Pedestrian Panic — Procedural Bicubic Pixel-Art Hero & Pedestrian Generator
+ *  - Hero redrawn directly from Pete's original sprite (sky-blue collared shirt,
+ *    brown hair, khaki pants, right hand holding smartphone) in the exact same
+ *    44x68 -> 35x54 Mitchell-Netravali bicubic style as the Pedestrians
+ *  - 32 distinct pedestrian archetypes with randomized skin, hair, clothing,
+ *    pants, and accessory palettes
+ *  - Softly rounded shoulders matching Hero's silhouette (no square shoulders)
+ *  - Rock-steady shoulders/torso during walk cycles (zero shoulder bounce!)
  */
 
-const MASTER_W = 44; // 50% smaller pixels compared to previous 22x34 grid
+const MASTER_W = 44;
 const MASTER_H = 68;
-const OUT_W = 35;    // Bicubic-shrunk output matching Hero's 33x50 pixel softness
+const OUT_W = 35;
 const OUT_H = 54;
 
 // ---------------------------------------------------------------------------
@@ -28,7 +29,7 @@ export const HAIR_PALETTE = [
   '#dec692', '#7d7a78', '#b8b6b4', '#472a3d',
 ];
 
-// Carefully excludes Hero's sky-blue shirt (#55a2b8) so Hero always stands out!
+// Excludes Hero's sky-blue shirt (#57a4ba) so Hero always stands out!
 export const CLOTHING_PALETTE = [
   '#d6564b', '#c93f4b', '#e07a3d', '#d9a438',
   '#c9b842', '#7a9442', '#3d7d5b', '#2b6b5e',
@@ -51,10 +52,9 @@ export const ACCENT_PALETTE = [
 ];
 
 // ---------------------------------------------------------------------------
-// 32 Distinct Archetypes (12 original + 20 new designs)
+// 32 Distinct Pedestrian Archetypes
 // ---------------------------------------------------------------------------
 const ARCHETYPES = [
-  // Original 12 silhouettes
   { hairStyle: 'bob',      outfit: 'jacket',   accessory: 'tote' },
   { hairStyle: 'short',    outfit: 'hoodie',   accessory: 'backpack' },
   { hairStyle: 'ponytail', outfit: 'jacket',   accessory: 'none' },
@@ -68,7 +68,6 @@ const ARCHETYPES = [
   { hairStyle: 'bob',      outfit: 'blazer',   accessory: 'briefcase' },
   { hairStyle: 'short',    outfit: 'sweater',  accessory: 'headphones' },
 
-  // 20 New Archetypes!
   { hairStyle: 'pigtails', outfit: 'striped',  accessory: 'backpack' },
   { hairStyle: 'fedora',   outfit: 'trench',   accessory: 'briefcase' },
   { hairStyle: 'beret',    outfit: 'sweater',  accessory: 'tote' },
@@ -91,13 +90,14 @@ const ARCHETYPES = [
   { hairStyle: 'bob',      outfit: 'jacket',   accessory: 'scarf' },
 ];
 
-// 5-frame walk cycle on the 44x68 pixel grid
+// 5-frame walk cycle: ZERO vertical shoulder/torso bounce!
+// Only feet stride cleanly and lower sleeve cuffs shift subtly.
 const FRAME_POSES = [
-  { leftFootY: 62, rightFootY: 62, bob: 0,  leftArmDy: 0,  rightArmDy: 0 },
-  { leftFootY: 63, rightFootY: 59, bob: -1, leftArmDy: -1, rightArmDy: 1 },
-  { leftFootY: 64, rightFootY: 56, bob: -2, leftArmDy: -2, rightArmDy: 2 },
-  { leftFootY: 59, rightFootY: 63, bob: -1, leftArmDy: 1,  rightArmDy: -1 },
-  { leftFootY: 56, rightFootY: 64, bob: -2, leftArmDy: 2,  rightArmDy: -2 },
+  { leftFootY: 62, rightFootY: 62, leftCuffDy: 0,  rightCuffDy: 0 },
+  { leftFootY: 63, rightFootY: 59, leftCuffDy: -1, rightCuffDy: 1 },
+  { leftFootY: 64, rightFootY: 56, leftCuffDy: -2, rightCuffDy: 1 },
+  { leftFootY: 59, rightFootY: 63, leftCuffDy: 1,  rightCuffDy: -1 },
+  { leftFootY: 56, rightFootY: 64, leftCuffDy: 1,  rightCuffDy: -2 },
 ];
 
 function shadeHex(hex, delta) {
@@ -119,9 +119,6 @@ function pickRandom(arr, exclude = null) {
   return choice;
 }
 
-/**
- * Generates a randomized color palette for any archetype (skin, hair, clothing, pants, accent).
- */
 export function randomizePedestrianColors(archetype) {
   const skin = pickRandom(SKIN_PALETTE);
   const hair = pickRandom(HAIR_PALETTE);
@@ -158,11 +155,152 @@ function px(ctx, x, y, w, h, color) {
 }
 
 /**
- * Draws one crisp 44x68 pixel-art frame using flat stepped tones (zero smooth gradients).
+ * Draws a softly rounded-shoulder torso + fixed shoulder caps (matching Hero's silhouette).
+ * Shoulders taper organically from collar out to the sleeves — never square 90-degree corners.
+ */
+function drawRoundedShouldersTorso(ctx, ty, torsoH, baseCol, hiCol, darkCol) {
+  // Collar band
+  px(ctx, 15, ty - 2, 14, 3, hiCol);
+  px(ctx, 16, ty - 2, 12, 1, shadeHex(hiCol, 12));
+
+  // Tapered rounded shoulder curve (5 progressive steps down to full width)
+  px(ctx, 13, ty,     18, 2, baseCol);
+  px(ctx, 11, ty + 1, 22, 2, baseCol);
+  px(ctx, 10, ty + 3, 24, 2, baseCol);
+
+  // Main torso body with softly rounded lower hem corners
+  px(ctx, 12, ty + 4, 20, torsoH - 6, baseCol);
+  px(ctx, 13, ty + torsoH - 2, 18, 2, darkCol);
+  px(ctx, 14, ty + torsoH - 1, 16, 1, darkCol);
+
+  // Subtle stepped shading along left highlight & right shadow
+  px(ctx, 13, ty + 1, 4, 2, hiCol);
+  px(ctx, 12, ty + 4, 3, torsoH - 7, hiCol);
+  px(ctx, 29, ty + 4, 3, torsoH - 6, darkCol);
+  px(ctx, 30, ty + 2, 3, 3, darkCol);
+}
+
+/**
+ * Draws a single steady-shoulder hanging arm (top shoulder curve fixed; only bottom cuff/hand shifts slightly).
+ */
+function drawRoundedArm(ctx, side, ty, cuffDy, sleeveCol, sleeveDark, skinCol, skinDark) {
+  const isLeft = side === 'left';
+  const armBottom = ty + 20 + cuffDy;
+  const armTop = ty + 4;
+  const armH = Math.max(10, armBottom - armTop);
+
+  if (isLeft) {
+    // Rounded upper-left shoulder cap blending seamlessly into torso
+    px(ctx, 10, ty + 2, 3, 2, sleeveCol);
+    px(ctx, 9,  ty + 3, 4, 3, sleeveCol);
+    px(ctx, 8,  armTop + 1, 4, armH - 1, sleeveDark);
+    px(ctx, 9,  armTop + 1, 3, armH - 2, sleeveCol);
+    // Hand at cuff
+    px(ctx, 9,  armBottom, 3, 3, skinCol);
+    px(ctx, 9,  armBottom + 2, 3, 1, skinDark);
+  } else {
+    // Rounded upper-right shoulder cap
+    px(ctx, 31, ty + 2, 3, 2, sleeveDark);
+    px(ctx, 31, ty + 3, 4, 3, sleeveCol);
+    px(ctx, 32, armTop + 1, 4, armH - 1, sleeveCol);
+    px(ctx, 34, armTop + 1, 2, armH - 1, sleeveDark);
+    // Hand at cuff
+    px(ctx, 32, armBottom, 3, 3, skinCol);
+    px(ctx, 32, armBottom + 2, 3, 1, skinDark);
+  }
+}
+
+/**
+ * Draws Hero redrawn directly from Pete's original ped1..ped5 art:
+ *  - Brown short hair with warm highlight, peach ears/neck
+ *  - Collared sky-blue shirt with softly rounded shoulders
+ *  - Left arm down by side; right arm bent UP holding a glowing smartphone!
+ *  - Khaki pants + brown shoes, zero shoulder bounce during walk cycle!
+ */
+function drawHeroFrame(ctx, frameIdx) {
+  const pose = FRAME_POSES[frameIdx];
+  const ty = 30;
+  const hy = 4;
+
+  const skin = '#f2c7a5';
+  const skinDark = '#d1a27e';
+  const hair = '#4a3020';
+  const hairHi = '#63432e';
+  const hairDark = '#2e1c12';
+  const shirt = '#55a3b8';
+  const shirtHi = '#72bdd1';
+  const shirtDark = '#3a7d91';
+  const pants = '#8f7c63';
+  const pantsDark = '#6b5b47';
+  const shoes = '#3d2d22';
+
+  // 1. Ground shadow
+  px(ctx, 10, 61, 24, 5, 'rgba(28, 28, 32, 0.72)');
+  px(ctx, 8,  62, 28, 3, 'rgba(28, 28, 32, 0.65)');
+  px(ctx, 12, 62, 20, 3, 'rgba(18, 18, 22, 0.45)');
+
+  // 2. Khaki legs & brown shoes
+  const drawLeg = (x, footY) => {
+    const legTop = 51;
+    const legH = Math.max(4, footY - legTop);
+    px(ctx, x, legTop, 6, legH, pants);
+    px(ctx, x + 4, legTop, 2, legH, pantsDark);
+    px(ctx, x, footY, 6, 3, shoes);
+    px(ctx, x + 1, footY + 2, 4, 1, '#241913');
+  };
+  drawLeg(14, pose.leftFootY);
+  drawLeg(24, pose.rightFootY);
+
+  // 3. Left arm hanging steadily (no shoulder bounce)
+  drawRoundedArm(ctx, 'left', ty, pose.leftCuffDy, shirt, shirtDark, skin, skinDark);
+
+  // 4. Right arm bent UP holding smartphone (matches Pete's original Hero pose!)
+  px(ctx, 31, ty + 2, 3, 2, shirtDark);
+  px(ctx, 31, ty + 3, 4, 4, shirt);
+  px(ctx, 32, ty + 5, 4, 10, shirt);
+  px(ctx, 34, ty + 5, 2, 10, shirtDark);
+  // Forearm angled up to hold phone
+  px(ctx, 33, ty + 11, 5, 4, shirtDark);
+  px(ctx, 34, ty + 8,  4, 6, shirt);
+  // Hand holding phone
+  px(ctx, 35, ty + 5,  4, 4, skin);
+  px(ctx, 36, ty + 8,  3, 1, skinDark);
+  // Smartphone (dark bezel + bright white glowing screen!)
+  px(ctx, 33, ty - 4, 7, 10, '#3a3f47');
+  px(ctx, 34, ty - 3, 5, 8,  '#f2f6fa');
+  px(ctx, 35, ty - 2, 3, 5,  '#ffffff');
+  px(ctx, 35, ty + 4, 3, 1,  '#cbd5e1');
+
+  // 5. Collared sky-blue rounded-shoulder torso
+  drawRoundedShouldersTorso(ctx, ty, 23, shirt, shirtHi, shirtDark);
+
+  // 6. Head, Ears & Neck
+  px(ctx, 6,  hy + 12, 3, 6, skinDark);
+  px(ctx, 7,  hy + 13, 2, 4, skin);
+  px(ctx, 35, hy + 12, 3, 6, skinDark);
+  px(ctx, 35, hy + 13, 2, 4, skin);
+
+  px(ctx, 10, hy + 5,  24, 20, skin);
+  px(ctx, 9,  hy + 8,  26, 15, skin);
+  px(ctx, 12, hy + 23, 20, 3,  skinDark);
+
+  // 7. Hero's brown rounded short hair
+  px(ctx, 11, hy,      22, 20, hair);
+  px(ctx, 9,  hy + 2,  26, 18, hair);
+  px(ctx, 8,  hy + 4,  28, 15, hair);
+  px(ctx, 13, hy + 2,  11, 4,  hairHi);
+  px(ctx, 10, hy + 4,  4,  6,  hairHi);
+  px(ctx, 32, hy + 4,  4,  15, hairDark);
+  px(ctx, 10, hy + 18, 24, 2,  hairDark);
+}
+
+/**
+ * Draws one crisp 44x68 pedestrian frame with rounded shoulders & zero shoulder bounce.
  */
 function drawFinePixelFrame(ctx, s, frameIdx) {
   const pose = FRAME_POSES[frameIdx];
-  const b = pose.bob;
+  const ty = 30;
+  const hy = 4;
 
   // 1. Stepped ground shadow
   px(ctx, 10, 61, 24, 5, 'rgba(28, 28, 32, 0.72)');
@@ -171,7 +309,7 @@ function drawFinePixelFrame(ctx, s, frameIdx) {
 
   // 2. Legs & Shoes
   const drawLeg = (x, footY) => {
-    const legTop = 51 + b;
+    const legTop = 51;
     const legH = Math.max(4, footY - legTop);
     px(ctx, x, legTop, 6, legH, s.pants);
     px(ctx, x + 4, legTop, 2, legH, s.pantsDark);
@@ -181,119 +319,101 @@ function drawFinePixelFrame(ctx, s, frameIdx) {
   drawLeg(14, pose.leftFootY);
   drawLeg(24, pose.rightFootY);
 
-  // 3. Arms & Hands
-  const leftArmY = 32 + b + pose.leftArmDy;
-  const rightArmY = 32 + b + pose.rightArmDy;
+  // 3. Arms with rounded fixed shoulders (no bouncing!)
   const sleeveCol = s.outfit === 'vest' ? shadeHex(s.jacketHi, 30) : s.jacket;
   const sleeveDark = s.outfit === 'vest' ? shadeHex(s.jacket, 10) : s.jacketDark;
 
-  // Left arm
-  px(ctx, 8, leftArmY, 4, 17, sleeveDark);
-  px(ctx, 9, leftArmY, 3, 16, sleeveCol);
-  px(ctx, 8, leftArmY + 17, 4, 3, s.skin);
-  px(ctx, 8, leftArmY + 19, 4, 1, s.skinDark);
+  drawRoundedArm(ctx, 'left', ty, pose.leftCuffDy, sleeveCol, sleeveDark, s.skin, s.skinDark);
+  drawRoundedArm(ctx, 'right', ty, pose.rightCuffDy, sleeveCol, sleeveDark, s.skin, s.skinDark);
 
-  // Right arm
-  px(ctx, 32, rightArmY, 4, 17, sleeveCol);
-  px(ctx, 34, rightArmY, 2, 17, sleeveDark);
-  px(ctx, 32, rightArmY + 17, 4, 3, s.skin);
-  px(ctx, 32, rightArmY + 19, 4, 1, s.skinDark);
+  // Side held accessories (track lower cuff subtly without bouncing shoulders)
+  const leftHandY = ty + 20 + pose.leftCuffDy;
+  const rightHandY = ty + 20 + pose.rightCuffDy;
 
-  // Side held accessories
   if (s.accessory === 'briefcase') {
-    const by = rightArmY + 14;
+    const by = rightHandY - 2;
     px(ctx, 35, by, 6, 10, s.accDark);
     px(ctx, 35, by + 1, 5, 8, s.acc);
     px(ctx, 37, by - 2, 2, 2, s.accDark);
     px(ctx, 36, by + 4, 4, 1, s.accHi);
   } else if (s.accessory === 'tote') {
-    const ty = leftArmY + 12;
-    px(ctx, 3, ty, 6, 11, s.accDark);
-    px(ctx, 3, ty + 1, 5, 9, s.acc);
-    px(ctx, 5, ty - 4, 2, 4, s.accDark);
+    const tyBag = leftHandY - 4;
+    px(ctx, 3, tyBag, 6, 11, s.accDark);
+    px(ctx, 3, tyBag + 1, 5, 9, s.acc);
+    px(ctx, 5, tyBag - 4, 2, 4, s.accDark);
   } else if (s.accessory === 'grocery') {
-    const gy = leftArmY + 11;
+    const gy = leftHandY - 5;
     px(ctx, 2, gy, 7, 12, '#c7a474');
     px(ctx, 3, gy + 1, 5, 10, '#d9b98b');
-    px(ctx, 3, gy - 3, 2, 3, '#529448'); // Greens peeking out!
+    px(ctx, 3, gy - 3, 2, 3, '#529448');
     px(ctx, 6, gy - 2, 2, 2, '#d6564b');
   } else if (s.accessory === 'duffel') {
-    const dy = rightArmY + 13;
+    const dy = rightHandY - 3;
     px(ctx, 34, dy, 8, 9, s.accDark);
     px(ctx, 35, dy + 1, 6, 7, s.acc);
     px(ctx, 36, dy + 2, 4, 2, s.accHi);
   } else if (s.accessory === 'coffee') {
-    const cy = rightArmY + 11;
+    const cy = rightHandY - 5;
     px(ctx, 35, cy, 4, 6, '#ece9e4');
     px(ctx, 35, cy, 4, 1, '#3d281c');
     px(ctx, 35, cy + 2, 4, 2, '#b88856');
   } else if (s.accessory === 'umbrella') {
-    const uy = rightArmY + 8;
+    const uy = rightHandY - 8;
     px(ctx, 36, uy, 2, 20, s.accDark);
     px(ctx, 36, uy + 2, 2, 14, s.acc);
     px(ctx, 35, uy - 2, 3, 2, '#5c3c24');
   }
 
-  // 4. Torso / Outfit
-  const ty = 30 + b;
+  // 4. Rounded-Shoulder Torso / Outfit
   const torsoH = s.outfit === 'trench' ? 27 : 23;
-  px(ctx, 12, ty, 20, torsoH, s.jacket);
-  px(ctx, 14, ty - 2, 16, 3, s.jacketHi); // Collar
-  px(ctx, 12, ty + 2, 3, torsoH - 3, s.jacketHi);
-  px(ctx, 29, ty + 2, 3, torsoH - 2, s.jacketDark);
-  px(ctx, 12, ty + torsoH - 2, 20, 2, s.jacketDark);
+  drawRoundedShouldersTorso(ctx, ty, torsoH, s.jacket, s.jacketHi, s.jacketDark);
 
   // Outfit-specific pixel details
   if (s.outfit === 'striped') {
-    for (let sy = ty + 4; sy < ty + torsoH - 3; sy += 5) {
+    for (let sy = ty + 5; sy < ty + torsoH - 3; sy += 5) {
       px(ctx, 12, sy, 20, 2, '#f0eee9');
       px(ctx, 29, sy, 3, 2, '#cfccc6');
     }
   } else if (s.outfit === 'blazer') {
-    px(ctx, 21, ty + 2, 2, torsoH - 3, s.jacketDark); // Back vent seam
-    px(ctx, 13, ty + 1, 18, 2, s.jacketHi);
+    px(ctx, 21, ty + 3, 2, torsoH - 5, s.jacketDark);
   } else if (s.outfit === 'hoodie' && s.hairStyle !== 'hoodUp') {
-    // Draped hood resting behind neck
-    px(ctx, 14, ty, 16, 7, s.jacketDark);
-    px(ctx, 15, ty + 1, 14, 5, s.jacketHi);
+    px(ctx, 15, ty, 14, 7, s.jacketDark);
+    px(ctx, 16, ty + 1, 12, 5, s.jacketHi);
   } else if (s.outfit === 'overalls') {
-    px(ctx, 14, ty, 4, torsoH, s.pants);
-    px(ctx, 26, ty, 4, torsoH, s.pants);
-    px(ctx, 12, ty + 10, 20, torsoH - 10, s.pants);
-    px(ctx, 29, ty + 10, 3, torsoH - 10, s.pantsDark);
+    px(ctx, 15, ty + 1, 3, torsoH - 2, s.pants);
+    px(ctx, 26, ty + 1, 3, torsoH - 2, s.pants);
+    px(ctx, 12, ty + 10, 20, torsoH - 12, s.pants);
+    px(ctx, 29, ty + 10, 3, torsoH - 12, s.pantsDark);
   } else if (s.outfit === 'trench') {
-    // Belt across waist
     px(ctx, 12, ty + 14, 20, 3, s.jacketDark);
     px(ctx, 20, ty + 14, 4, 3, s.accHi);
   }
 
   // Back-worn accessories
   if (s.accessory === 'backpack') {
-    px(ctx, 14, ty + 4, 16, 16, s.acc);
-    px(ctx, 14, ty + 4, 2, 16, s.accDark);
-    px(ctx, 28, ty + 4, 2, 16, s.accDark);
+    px(ctx, 15, ty + 4, 14, 15, s.acc);
+    px(ctx, 14, ty + 5, 16, 13, s.acc);
+    px(ctx, 14, ty + 5, 2, 13, s.accDark);
+    px(ctx, 28, ty + 5, 2, 13, s.accDark);
     px(ctx, 16, ty + 5, 12, 3, s.accHi);
-    px(ctx, 15, ty + 12, 14, 7, s.accDark);
-    px(ctx, 16, ty + 13, 12, 5, s.acc);
-    px(ctx, 19, ty + 2, 6, 2, s.accDark); // Top strap loop
+    px(ctx, 15, ty + 12, 14, 6, s.accDark);
+    px(ctx, 16, ty + 13, 12, 4, s.acc);
+    px(ctx, 19, ty + 2, 6, 2, s.accDark);
   } else if (s.accessory === 'messenger') {
-    // Diagonal strap across back + low hip bag
     for (let k = 0; k < 14; k++) {
       px(ctx, 13 + k, ty + 2 + k, 3, 2, s.accDark);
     }
     px(ctx, 22, ty + 14, 11, 9, s.accDark);
     px(ctx, 23, ty + 15, 9, 7, s.acc);
   } else if (s.accessory === 'yogaMat') {
-    // Rolled yoga mat strapped diagonally across back
-    for (let k = 0; k < 16; k++) {
-      px(ctx, 11 + k, ty + 1 + Math.round(k * 0.9), 5, 4, s.acc);
-      px(ctx, 11 + k, ty + 4 + Math.round(k * 0.9), 5, 1, s.accDark);
+    for (let k = 0; k < 15; k++) {
+      px(ctx, 12 + k, ty + 2 + Math.round(k * 0.85), 5, 4, s.acc);
+      px(ctx, 12 + k, ty + 5 + Math.round(k * 0.85), 5, 1, s.accDark);
     }
   } else if (s.accessory === 'skateboard') {
-    // Skateboard tucked vertically behind backpack
-    px(ctx, 18, ty - 1, 8, 26, s.accDark);
-    px(ctx, 19, ty, 6, 24, s.acc);
-    px(ctx, 17, ty + 5, 10, 2, '#d8dce3');
+    px(ctx, 18, ty, 8, 25, s.accDark);
+    px(ctx, 19, ty + 1, 6, 23, s.acc);
+    px(ctx, 17, ty + 6, 10, 2, '#d8dce3');
     px(ctx, 17, ty + 18, 10, 2, '#d8dce3');
   } else if (s.accessory === 'scarf') {
     px(ctx, 13, ty - 1, 18, 5, s.acc);
@@ -303,24 +423,21 @@ function drawFinePixelFrame(ctx, s, frameIdx) {
   }
 
   // 5. Head, Ears & Neck
-  const hy = 4 + b;
-  // Ears
   px(ctx, 6, hy + 12, 3, 6, s.skinDark);
   px(ctx, 7, hy + 13, 2, 4, s.skin);
   px(ctx, 35, hy + 12, 3, 6, s.skinDark);
   px(ctx, 35, hy + 13, 2, 4, s.skin);
 
-  // Head/neck skin shape
   px(ctx, 10, hy + 5, 24, 20, s.skin);
   px(ctx, 9,  hy + 8, 26, 15, s.skin);
   px(ctx, 12, hy + 23, 20, 3, s.skinDark);
 
-  // 6. Hair & Headwear (18 distinct pixel styles!)
+  // 6. Hair & Headwear
   if (s.hairStyle === 'bald') {
     px(ctx, 11, hy + 2, 22, 22, s.skin);
     px(ctx, 9,  hy + 5, 26, 16, s.skin);
-    px(ctx, 14, hy + 4, 8, 4, shadeHex(s.skin, 20)); // Shine
-    px(ctx, 9,  hy + 15, 26, 4, s.hair);            // Hair fringe around lower back
+    px(ctx, 14, hy + 4, 8, 4, shadeHex(s.skin, 20));
+    px(ctx, 9,  hy + 15, 26, 4, s.hair);
     px(ctx, 10, hy + 18, 24, 2, s.hairDark);
   } else if (s.hairStyle === 'beanie') {
     px(ctx, 9,  hy + 15, 26, 6, s.hair);
@@ -339,11 +456,11 @@ function drawFinePixelFrame(ctx, s, frameIdx) {
     px(ctx, 18, hy + 14, 8, 2, '#e2e6ec');
   } else if (s.hairStyle === 'fedora') {
     px(ctx, 9,  hy + 15, 26, 6, s.hair);
-    px(ctx, 5,  hy + 12, 34, 4, s.hatDark); // Brim
+    px(ctx, 5,  hy + 12, 34, 4, s.hatDark);
     px(ctx, 6,  hy + 11, 32, 2, s.hat);
     px(ctx, 11, hy + 2, 22, 10, s.hat);
     px(ctx, 13, hy + 3, 9, 3, s.hatHi);
-    px(ctx, 11, hy + 9, 22, 2, '#221f26');  // Hatband
+    px(ctx, 11, hy + 9, 22, 2, '#221f26');
   } else if (s.hairStyle === 'sunhat') {
     px(ctx, 9,  hy + 16, 26, 8, s.hair);
     px(ctx, 4,  hy + 10, 36, 5, '#e0c794');
@@ -354,10 +471,10 @@ function drawFinePixelFrame(ctx, s, frameIdx) {
     px(ctx, 9,  hy + 13, 26, 9, s.hair);
     px(ctx, 7,  hy + 3, 28, 11, s.hat);
     px(ctx, 10, hy + 1, 22, 5, s.hatHi);
-    px(ctx, 21, hy, 3, 2, s.hatDark); // Stem
+    px(ctx, 21, hy, 3, 2, s.hatDark);
     px(ctx, 8,  hy + 11, 26, 3, s.hatDark);
   } else if (s.hairStyle === 'hoodUp') {
-    px(ctx, 8,  hy + 1, 28, 24, s.jacket);
+    px(ctx, 8,  hy + 2, 28, 23, s.jacket);
     px(ctx, 10, hy, 24, 25, s.jacket);
     px(ctx, 11, hy + 2, 8, 10, s.jacketHi);
     px(ctx, 31, hy + 3, 5, 21, s.jacketDark);
@@ -439,8 +556,7 @@ function drawFinePixelFrame(ctx, s, frameIdx) {
 
 /**
  * Mitchell-Netravali bicubic kernel (B = 1/3, C = 1/3) — Photoshop-style crisp
- * bicubic downsampling that gives pixel edges subtle organic fuzziness without
- * turning flat pixel fills into smooth gradients.
+ * bicubic downsampling with subtle pixel-edge fuzziness.
  */
 function mitchellWeight(x) {
   const ax = Math.abs(x);
@@ -459,7 +575,6 @@ function bicubicResampleCanvas(srcCanvas, dstW, dstH) {
   const sCtx = srcCanvas.getContext('2d');
   const src = sCtx.getImageData(0, 0, srcW, srcH).data;
 
-  // Horizontal pass: srcW x srcH -> dstW x srcH (premultiplied alpha to avoid dark edge halos)
   const tmp = new Float32Array(dstW * srcH * 4);
   const scaleX = srcW / dstW;
 
@@ -469,7 +584,7 @@ function bicubicResampleCanvas(srcCanvas, dstW, dstH) {
     const weights = [0, 0, 0, 0];
     let wSum = 0;
     for (let k = -1; k <= 2; k++) {
-      const w = mitchellWeight((x0 + k - cx));
+      const w = mitchellWeight(x0 + k - cx);
       weights[k + 1] = w;
       wSum += w;
     }
@@ -495,7 +610,6 @@ function bicubicResampleCanvas(srcCanvas, dstW, dstH) {
     }
   }
 
-  // Vertical pass: dstW x srcH -> dstW x dstH
   const dstCanvas = document.createElement('canvas');
   dstCanvas.width = dstW;
   dstCanvas.height = dstH;
@@ -510,7 +624,7 @@ function bicubicResampleCanvas(srcCanvas, dstW, dstH) {
     const weights = [0, 0, 0, 0];
     let wSum = 0;
     for (let k = -1; k <= 2; k++) {
-      const w = mitchellWeight((y0 + k - cy));
+      const w = mitchellWeight(y0 + k - cy);
       weights[k + 1] = w;
       wSum += w;
     }
@@ -540,6 +654,25 @@ function bicubicResampleCanvas(srcCanvas, dstW, dstH) {
 
   dCtx.putImageData(dstImg, 0, 0);
   return dstCanvas;
+}
+
+/**
+ * Renders the 5-frame redrawn Hero sprite set matching the Pedestrians' bicubic pixel style.
+ */
+export function buildHeroSprites() {
+  const master = document.createElement('canvas');
+  master.width = MASTER_W;
+  master.height = MASTER_H;
+  const mCtx = master.getContext('2d');
+  mCtx.imageSmoothingEnabled = false;
+
+  const frames = [];
+  for (let f = 0; f < 5; f++) {
+    mCtx.clearRect(0, 0, MASTER_W, MASTER_H);
+    drawHeroFrame(mCtx, f);
+    frames.push(bicubicResampleCanvas(master, OUT_W, OUT_H));
+  }
+  return frames;
 }
 
 /**

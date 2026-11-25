@@ -9,7 +9,7 @@ import { SoundEngine } from './sound.js';
 import { PEDESTRIAN_VARIANT_COUNT } from './pedestrianArt.js';
 
 const HIGH_SCORE_KEY = 'pedestrian_panic_high_score_v1';
-const TUNING_KEY = 'pedestrian_panic_tuning_v1';
+const TUNING_KEY = 'pedestrian_panic_tuning_v2';
 
 const canvas = document.getElementById('game-canvas');
 const splashOverlay = document.getElementById('splash-screen');
@@ -199,11 +199,13 @@ function populateSplashCast() {
 
   leftPeds.forEach(appendPedCanvas);
 
-  const heroImg = document.createElement('img');
-  heroImg.src = 'assets/ped1.png';
-  heroImg.alt = 'Hero';
-  heroImg.className = 'cast-sprite cast-hero';
-  splashCastEl.appendChild(heroImg);
+  const heroSrc = renderer.heroFrames[0];
+  const heroCanvas = document.createElement('canvas');
+  heroCanvas.width = heroSrc.width;
+  heroCanvas.height = heroSrc.height;
+  heroCanvas.className = 'cast-sprite cast-hero';
+  heroCanvas.getContext('2d').drawImage(heroSrc, 0, 0);
+  splashCastEl.appendChild(heroCanvas);
 
   rightPeds.forEach(appendPedCanvas);
 }

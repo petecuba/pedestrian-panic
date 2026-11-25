@@ -33,14 +33,14 @@ export const CONFIG = {
     LATERAL_SPEED: 215,     // Left/right weaving speed
     LATERAL_LERP: 0.24,
     // Smooth eased Slow Down
-    SLOW_MAX_DURATION: 1.0, // Hold up to 1.0s
+    SLOW_MAX_DURATION: 0.8, // Hold up to 0.8s
     SLOW_COOLDOWN: 0.75,    // 0.75s cooldown
-    SLOW_EASE_IN_TIME: 0.22,
-    SLOW_EASE_OUT_TIME: 0.24,
+    SLOW_EASE_IN_TIME: 0.20,
+    SLOW_EASE_OUT_TIME: 0.22,
     RECOVER_Y_SPEED: 105,   // Smooth peak downward recovery speed while braking
-    BASE_MASS: 150,         // Hero weight: 1 ped (~114) can't budge Hero; 2+ push forward
-    SLOW_EXTRA_MASS: 315,   // Slowdown power (total ~465 -> holds 1..4 peds; 5+ overpower)
-    FRICTION: 0.25,         // 0 = super slippery corners, 1 = very sticky shoulders
+    BASE_MASS: 210,         // Tuned Hero weight
+    SLOW_EXTRA_MASS: 200,   // Tuned slowdown power
+    FRICTION: 0.85,         // Tuned Hero rear grip
     NO_CONTACT_DAMP: 24.0,  // Instant stop when no pedestrian is touching Hero
     GAME_OVER_Y: -22,       // Hero pushed off top of screen
     DANGER_Y: 112,          // Red danger pulse threshold near top
@@ -53,9 +53,9 @@ export const CONFIG = {
     // Rounded-top hitbox
     HALF_W: 19.0,
     HALF_H: 20.5,
-    CORNER_R_TOP: 14.5,
+    CORNER_R_TOP: 14.0,
     CORNER_R_BOT: 9.0,
-    FRICTION: 0.25,         // 0 = super slippery crowd glide, 1 = sticky crowd grip
+    FRICTION: 1.0,          // Tuned crowd grip
     SPEED_MULT: 1.0,        // Multiplier on pedestrian walking velocity
     MIN_REL_SPEED: 52,      // Base walking speed range (decoupled from weight)
     MAX_REL_SPEED: 84,
@@ -63,27 +63,27 @@ export const CONFIG = {
     WEIGHT_AVG: 114,        // Mean pedestrian weight (spawns vary ±8 around this)
     WEIGHT_SPREAD: 8,
     PUSH_POWER_RAMP: 12,
-    FORCE_MULT: 1.0,        // Shove responsiveness when crowd weight exceeds Hero weight
+    FORCE_MULT: 0.7,        // Tuned shove force
     SPAWN_Y_OFFSET: 46,
     DESPAWN_TOP_Y: -88,
     DESPAWN_BOTTOM_Y: 660,
   },
 
-  // Spawning & difficulty curve
+  // Spawning & difficulty curve (continuously escalates over time from base RATE_MULT)
   SPAWN: {
-    RATE_MULT: 1.0,         // Multiplier on crowd spawn rate (higher = denser sidewalk faster)
+    RATE_MULT: 0.9,         // Starting spawn rate multiplier (grows continuously over time!)
     INITIAL_DELAY: 0.55,
     START_INTERVAL: 1.05,
-    MIN_INTERVAL: 0.35,
+    MIN_INTERVAL: 0.24,
     RAMP_DURATION: 45,
-    MAX_ACTIVE: 32,
+    MAX_ACTIVE: 46,
     CLUSTER_CHANCE_START: 0.22,
-    CLUSTER_CHANCE_MAX: 0.54,
+    CLUSTER_CHANCE_MAX: 0.65,
   },
 
   // Input & phone tuning
   INPUT: {
-    TILT_SENSITIVITY: 1.0,  // Multiplier on tilt steering speed (0.5x .. 2.5x)
+    TILT_SENSITIVITY: 0.7,  // Tuned phone tilt sensitivity
   },
 
   // Debug visualization

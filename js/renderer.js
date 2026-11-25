@@ -4,7 +4,7 @@
  * Hero->Ped->Ped chain feedback, floating score popups, and overhead right-edge awnings.
  */
 import { CONFIG } from './config.js';
-import { buildPedestrianSprites } from './pedestrianArt.js';
+import { buildHeroSprites, buildPedestrianSprites } from './pedestrianArt.js';
 
 // Walk cycle frame sequence matching ped1..ped5 (indices 0..4)
 const WALK_CYCLE = [0, 1, 2, 1, 0, 3, 4, 3];
@@ -26,7 +26,7 @@ export class GameRenderer {
     this.resize();
 
     this.sidewalkTile = this.buildSidewalkTile();
-    this.heroFrames = [];
+    this.heroFrames = buildHeroSprites();
     this.awningImgs = [];
     this.pedSprites = buildPedestrianSprites();
 
@@ -176,12 +176,7 @@ export class GameRenderer {
   }
 
   async loadAssets() {
-    const [h1, h2, h3, h4, h5, a1, a2, a3, a4, a5, a6] = await Promise.all([
-      loadImage('assets/ped1.png'),
-      loadImage('assets/ped2.png'),
-      loadImage('assets/ped3.png'),
-      loadImage('assets/ped4.png'),
-      loadImage('assets/ped5.png'),
+    const [a1, a2, a3, a4, a5, a6] = await Promise.all([
       loadImage('awnings/awning.png'),
       loadImage('awnings/awning2.png'),
       loadImage('awnings/awning3.png'),
@@ -190,7 +185,6 @@ export class GameRenderer {
       loadImage('awnings/awning6.png'),
     ]);
 
-    this.heroFrames = [h1, h2, h3, h4, h5].filter(Boolean);
     this.awningImgs = [a1, a2, a3, a4, a5, a6].filter(Boolean);
     this.resetEffects();
   }
