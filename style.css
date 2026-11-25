@@ -7,11 +7,13 @@
   --accent-cyan: #22d3ee;
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
+  --font-pixel: "Geist Pixel", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 html,
@@ -23,10 +25,17 @@ body {
   overflow: hidden;
   background: radial-gradient(circle at top, #23293a 0%, var(--bg-outer) 72%);
   color: var(--text-main);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-pixel);
+  font-synthesis: none;
   user-select: none;
   -webkit-user-select: none;
-  touch-action: none;
+  touch-action: manipulation;
+}
+
+button,
+input,
+output {
+  font-family: var(--font-pixel);
 }
 
 .app-shell {
@@ -257,9 +266,10 @@ h1 {
 .cast-sprite {
   width: 30px;
   height: 45px;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  opacity: 0.92;
+  image-rendering: auto;
+  opacity: 0.94;
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 
 .cast-hero {

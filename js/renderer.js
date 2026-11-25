@@ -25,7 +25,7 @@ export class GameRenderer {
     this.dpr = Math.min(window.devicePixelRatio || 1, 3);
     this.resize();
 
-    this.sidewalkImg = null;
+    this.sidewalkTile = this.buildSidewalkTile();
     this.heroFrames = [];
     this.awningImgs = [];
     this.pedSprites = buildPedestrianSprites();
@@ -40,6 +40,135 @@ export class GameRenderer {
     this.skidTimer = 0;
   }
 
+  refreshPedestrians() {
+    this.pedSprites = buildPedestrianSprites();
+  }
+
+  /**
+   * Procedurally generates a seamless 320x640 (rendered at 2x = 640x1280) urban sidewalk tile:
+   *  - Dark speckled asphalt street on the left (x = 0..22)
+   *  - Raised concrete curb with drop-shadow bevel & joints (x = 22..28)
+   *  - Concrete sidewalk grid slabs with varied tones, subtle grain & hairline cracks (x = 28..320)
+   */
+  buildSidewalkTile() {
+    const W = CONFIG.WIDTH;
+    const H = 640;
+    const scale = 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = W * scale;
+    canvas.height = H * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+
+    // Deterministic PRNG for consistent crisp sidewalk grain
+    let seed = 42197;
+    const rand = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+
+    const curbX = CONFIG.CURB_X;
+
+    // 1. Asphalt street strip on left (0 .. curbX - 5)
+    ctx.fillStyle = '#5c6066';
+    ctx.fillRect(0, 0, curbX - 4, H);
+    for (let i = 0; i < 950; i++) {
+      const gx = rand() * (curbX - 5);
+      const gy = rand() * H;
+      const shade = rand() < 0.5 ? 'rgba(255,255,255,0.09)' : 'rgba(0,0,0,0.16)';
+      ctx.fillStyle = shade;
+      ctx.fillRect(gx, gy, 1.5, 1.5);
+    }
+
+    // 2. Concrete sidewalk slabs (5 columns across curbX..W, 10 rows of 64px)
+    const cols = 5;
+    const rows = 10;
+    const slabW = (W - curbX) / cols;
+    const slabH = H / rows;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const sx = curbX + c * slabW;
+        const sy = r * slabH;
+        const tone = 184 + Math.floor(rand() * 26); // #b8..#d2 varied concrete slabs
+        ctx.fillStyle = `rgb(${tone}, ${tone + 1}, ${tone + 2})`;
+        ctx.fillRect(sx, sy, slabW + 0.5, slabH + 0.5);
+
+        // Concrete aggregate grain per slab
+        const dots = 150 + Math.floor(rand() * 110);
+        for (let d = 0; d < dots; d++) {
+          const dx = sx + 1 + rand() * (slabW - 2);
+          const dy = sy + 1 + rand() * (slabH - 2);
+          ctx.fillStyle = rand() < 0.45
+            ? 'rgba(255,255,255,0.22)'
+            : 'rgba(42,46,52,0.19)';
+          const sz = rand() < 0.7 ? 1 : 1.5;
+          ctx.fillRect(dx, dy, sz, sz);
+        }
+
+        // Occasional subtle hairline crack
+        if (rand() < 0.14) {
+          ctx.strokeStyle = 'rgba(78, 82, 88, 0.34)';
+          ctx.lineWidth = 0.8;
+          ctx.beginPath();
+          let cx = sx + 6 + rand() * (slabW - 12);
+          let cy = sy + 6 + rand() * (slabH - 18);
+          ctx.moveTo(cx, cy);
+          for (let seg = 0; seg < 3; seg++) {
+            cx += (rand() - 0.5) * 14;
+            cy += 4 + rand() * 8;
+            ctx.lineTo(cx, cy);
+          }
+          ctx.stroke();
+        }
+      }
+    }
+
+    // 3. Slab expansion-joint seams (horizontal + vertical)
+    ctx.strokeStyle = 'rgba(84, 88, 94, 0.72)';
+    ctx.lineWidth = 1.25;
+    for (let r = 0; r < rows; r++) {
+      const y = r * slabH + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(curbX, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+      // Subtle sunlit top highlight beside groove
+      ctx.strokeStyle = 'rgba(240, 244, 248, 0.32)';
+      ctx.beginPath();
+      ctx.moveTo(curbX, y + 1.2);
+      ctx.lineTo(W, y + 1.2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(84, 88, 94, 0.72)';
+    }
+    for (let c = 1; c < cols; c++) {
+      const x = curbX + c * slabW;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+    }
+
+    // 4. Raised Left Curbstone & Gutter Drop-Shadow (strict boundary at CURB_X)
+    ctx.fillStyle = 'rgba(20, 22, 26, 0.52)';
+    ctx.fillRect(curbX - 7, 0, 3, H);        // Gutter shadow onto asphalt
+    ctx.fillStyle = '#8b9096';
+    ctx.fillRect(curbX - 4, 0, 4, H);        // Curb face
+    ctx.fillStyle = '#cfd4da';
+    ctx.fillRect(curbX - 1, 0, 2, H);        // Crisp top bevel edge
+    ctx.strokeStyle = 'rgba(65, 68, 74, 0.65)';
+    ctx.lineWidth = 1;
+    for (let r = 0; r < rows; r++) {
+      const y = r * slabH + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(curbX - 4, y);
+      ctx.lineTo(curbX + 1, y);
+      ctx.stroke();
+    }
+
+    return canvas;
+  }
+
   resize() {
     this.dpr = Math.min(window.devicePixelRatio || 1, 3);
     this.canvas.width = Math.round(CONFIG.WIDTH * this.dpr);
@@ -47,8 +176,7 @@ export class GameRenderer {
   }
 
   async loadAssets() {
-    const [sidewalk, h1, h2, h3, h4, h5, a1, a2, a3, a4, a5, a6] = await Promise.all([
-      loadImage('street/sidewalk-1.png'),
+    const [h1, h2, h3, h4, h5, a1, a2, a3, a4, a5, a6] = await Promise.all([
       loadImage('assets/ped1.png'),
       loadImage('assets/ped2.png'),
       loadImage('assets/ped3.png'),
@@ -62,7 +190,6 @@ export class GameRenderer {
       loadImage('awnings/awning6.png'),
     ]);
 
-    this.sidewalkImg = sidewalk;
     this.heroFrames = [h1, h2, h3, h4, h5].filter(Boolean);
     this.awningImgs = [a1, a2, a3, a4, a5, a6].filter(Boolean);
     this.resetEffects();
@@ -212,31 +339,10 @@ export class GameRenderer {
   }
 
   drawSidewalk(ctx, distance) {
-    if (this.sidewalkImg) {
-      const tileH = this.sidewalkImg.height;
-      const offset = ((distance % tileH) + tileH) % tileH;
-      // Draw two stacked tiles to cover full viewport seamlessly
-      ctx.drawImage(this.sidewalkImg, 0, offset - tileH, CONFIG.WIDTH, tileH);
-      ctx.drawImage(this.sidewalkImg, 0, offset, CONFIG.WIDTH, tileH);
-    } else {
-      // Procedural fallback sidewalk with left curb
-      ctx.fillStyle = '#6c7075';
-      ctx.fillRect(0, 0, CONFIG.CURB_X, CONFIG.HEIGHT);
-      ctx.fillStyle = '#c5c7c9';
-      ctx.fillRect(CONFIG.CURB_X, 0, CONFIG.WIDTH - CONFIG.CURB_X, CONFIG.HEIGHT);
-      const tile = 64;
-      const offset = ((distance % tile) + tile) % tile;
-      ctx.strokeStyle = '#9aa0a6';
-      ctx.lineWidth = 1.5;
-      for (let y = offset - tile; y < CONFIG.HEIGHT + tile; y += tile) {
-        ctx.beginPath();
-        ctx.moveTo(CONFIG.CURB_X, y);
-        ctx.lineTo(CONFIG.WIDTH, y);
-        ctx.stroke();
-      }
-      ctx.fillStyle = '#4e5257';
-      ctx.fillRect(CONFIG.CURB_X - 4, 0, 4, CONFIG.HEIGHT);
-    }
+    const tileH = 640;
+    const offset = ((distance % tileH) + tileH) % tileH;
+    ctx.drawImage(this.sidewalkTile, 0, offset - tileH, CONFIG.WIDTH, tileH);
+    ctx.drawImage(this.sidewalkTile, 0, offset, CONFIG.WIDTH, tileH);
   }
 
   drawCenterGuide(ctx, hero) {
@@ -322,7 +428,8 @@ export class GameRenderer {
     ctx.translate(hero.x, hero.y);
     ctx.rotate(lean);
     ctx.scale(stretchX, squashY);
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
 
     if (sprite) {
       // Anchor sprite center slightly above feet so rounded hitbox sits cleanly on body
@@ -348,14 +455,16 @@ export class GameRenderer {
 
     ctx.translate(ped.x, ped.y);
     ctx.rotate(lean);
-    ctx.imageSmoothingEnabled = false;
+    // High-quality smoothing over our bicubic-resampled 35x54 sprites matches Hero's soft pixel edges
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(sprite, -w / 2, -h / 2 - 4, w, h);
 
     // Subtle frustration mark above head ONLY when impeded by Hero (visualizing scoring rule!)
     if (ped.isImpededByHero) {
       const bob = Math.sin(timeSec * 14 + ped.id) * 1.6;
       const badge = ped.chainDepth > 1 ? '!!' : '!';
-      ctx.font = '800 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.font = '400 13px "Geist Pixel", monospace';
       ctx.textAlign = 'center';
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(20, 20, 24, 0.85)';
@@ -431,8 +540,8 @@ export class GameRenderer {
       const alpha = t < 0.2 ? t / 0.2 : 1 - (t - 0.2) / 0.8;
       ctx.globalAlpha = Math.max(0, alpha);
       ctx.font = p.chainDepth > 1
-        ? '900 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-        : '800 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ? '400 14px "Geist Pixel", monospace'
+        : '400 13px "Geist Pixel", monospace';
       const label = `+${p.points}`;
       ctx.lineWidth = 3;
       ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';

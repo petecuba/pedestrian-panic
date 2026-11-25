@@ -211,6 +211,7 @@ function populateSplashCast() {
 function startGame() {
   sound.unlock();
   applyTuningToConfig(tuning);
+  renderer.refreshPedestrians();
   sim.reset();
   renderer.resetEffects();
   input.resetSlowLatchState();

@@ -106,8 +106,36 @@ export class GameSimulation {
     this.spawnTimer = CONFIG.SPAWN.INITIAL_DELAY;
     this.events = [];
 
+    // Shuffle-bag ensures all 32 pedestrian variants cycle without back-to-back repeats
+    this.variantBag = [];
+    this.lastVariantIndex = -1;
+
     this.activeBlockedCount = 0;
     this.scrollSpeed = H.BASE_SPEED;
+  }
+
+  nextVariantIndex() {
+    if (this.variantBag.length === 0) {
+      for (let i = 0; i < this.variantCount; i++) {
+        this.variantBag.push(i);
+      }
+      // Fisher-Yates shuffle
+      for (let i = this.variantBag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = this.variantBag[i];
+        this.variantBag[i] = this.variantBag[j];
+        this.variantBag[j] = tmp;
+      }
+      // Avoid immediate repeat across bag boundary
+      if (this.variantBag.length > 1 && this.variantBag[this.variantBag.length - 1] === this.lastVariantIndex) {
+        const swap = this.variantBag[0];
+        this.variantBag[0] = this.variantBag[this.variantBag.length - 1];
+        this.variantBag[this.variantBag.length - 1] = swap;
+      }
+    }
+    const idx = this.variantBag.pop();
+    this.lastVariantIndex = idx;
+    return idx;
   }
 
   drainEvents() {
@@ -544,7 +572,7 @@ export class GameSimulation {
       pushPower,
       upwardSpeed,
       intendedScreenUp: upwardSpeed,
-      variantIndex: Math.floor(Math.random() * this.variantCount),
+      variantIndex: this.nextVariantIndex(),
       walkPhase: Math.random() * 6,
       chainDepth: 0,
       chainGrace: 0,

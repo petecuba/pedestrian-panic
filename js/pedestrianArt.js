@@ -1,301 +1,568 @@
 /**
- * Pedestrian Panic — Crisp Pixel-Art Pedestrian Sprite Generator
- * Renders 12 distinct 5-frame walk-cycle Pedestrian characters onto a crisp
- * 22x34 pixel grid using flat stepped color palettes (zero smooth gradients).
+ * Pedestrian Panic — Procedural Bicubic Pixel-Art Pedestrian Generator
+ *  - 32 distinct pedestrian archetypes (12 original + 20 new styles/accessories)
+ *  - Easy modular skin, hair, clothing, pants & accent color palettes picked randomly
+ *    so pedestrians never look repetitive on the sidewalk
+ *  - Drawn at 44x68 (50% smaller pixel size vs. 22x34) with flat stepped colors
+ *    and resampled with a separable Mitchell-Netravali bicubic filter (Photoshop-style
+ *    soft pixel edges without smooth color gradients)
  */
 
-const PX_W = 22;
-const PX_H = 34;
+const MASTER_W = 44; // 50% smaller pixels compared to previous 22x34 grid
+const MASTER_H = 68;
+const OUT_W = 35;    // Bicubic-shrunk output matching Hero's 33x50 pixel softness
+const OUT_H = 54;
 
-const PEDESTRIAN_STYLES = [
-  {
-    name: 'coral-tote',
-    skin: '#f0c29e', skinDark: '#cfa07c',
-    hair: '#4f3122', hairHi: '#6b4531', hairDark: '#331e14',
-    hairStyle: 'bob',
-    jacket: '#d6564b', jacketHi: '#e87468', jacketDark: '#a33931',
-    pants: '#454d59', pantsDark: '#2e343d',
-    shoes: '#26201d',
-    accessory: 'tote', acc: '#e6d5af', accDark: '#bfa97e',
-  },
-  {
-    name: 'mustard-backpack',
-    skin: '#d99e73', skinDark: '#b87e55',
-    hair: '#2b1e18', hairHi: '#423028', hairDark: '#1a110e',
-    hairStyle: 'short',
-    jacket: '#dba539', jacketHi: '#f0be54', jacketDark: '#ad7c1f',
-    pants: '#3b4b5e', pantsDark: '#273342',
-    shoes: '#292320',
-    accessory: 'backpack', acc: '#3f5f7d', accDark: '#2a435c',
-  },
-  {
-    name: 'forest-ponytail',
-    skin: '#f2c9aa', skinDark: '#d1a484',
-    hair: '#cca052', hairHi: '#e3bb6f', hairDark: '#9e7634',
-    hairStyle: 'ponytail',
-    jacket: '#3d7d5b', jacketHi: '#549974', jacketDark: '#27573d',
-    pants: '#3d3b3a', pantsDark: '#262423',
-    shoes: '#2b201a',
-    accessory: 'none',
-  },
-  {
-    name: 'suit-briefcase',
-    skin: '#e8b996', skinDark: '#c49574',
-    hair: '#757270', hairHi: '#969390', hairDark: '#524f4d',
-    hairStyle: 'short',
-    jacket: '#424957', jacketHi: '#5a6375', jacketDark: '#2b303b',
-    pants: '#303540', pantsDark: '#1e2129',
-    shoes: '#1c1918',
-    accessory: 'briefcase', acc: '#784a2a', accDark: '#4f2f18',
-  },
-  {
-    name: 'lavender-bun',
-    skin: '#8f5d3e', skinDark: '#6b4229',
-    hair: '#241d1c', hairHi: '#3d3230', hairDark: '#120e0d',
-    hairStyle: 'bun',
-    jacket: '#8f6eab', jacketHi: '#a989c4', jacketDark: '#674b80',
-    pants: '#3e434f', pantsDark: '#282b33',
-    shoes: '#242120',
-    accessory: 'tote', acc: '#de9c83', accDark: '#b5745b',
-  },
-  {
-    name: 'burgundy-beanie',
-    skin: '#f0c4a0', skinDark: '#cc9e7a',
-    hair: '#3d281c', hairHi: '#573a29', hairDark: '#24160e',
-    hairStyle: 'beanie',
-    hat: '#cc4949', hatHi: '#e36868', hatDark: '#992e2e',
-    jacket: '#7d3143', jacketHi: '#9c4459', jacketDark: '#571e2c',
-    pants: '#4f5561', pantsDark: '#363b45',
-    shoes: '#2b231d',
-    accessory: 'backpack', acc: '#363c42', accDark: '#22262b',
-  },
-  {
-    name: 'navy-auburn',
-    skin: '#f4ceb3', skinDark: '#d1a88c',
-    hair: '#8c3f26', hairHi: '#ad5639', hairDark: '#612714',
-    hairStyle: 'long',
-    jacket: '#374f78', jacketHi: '#4d6999', jacketDark: '#233554',
-    pants: '#5c5248', pantsDark: '#3d352e',
-    shoes: '#30221b',
-    accessory: 'none',
-  },
-  {
-    name: 'olive-curly',
-    skin: '#75472d', skinDark: '#522f1c',
-    hair: '#211b19', hairHi: '#382f2c', hairDark: '#120e0d',
-    hairStyle: 'curly',
-    jacket: '#6d7d48', jacketHi: '#86995d', jacketDark: '#4c5930',
-    pants: '#3b3c42', pantsDark: '#25262b',
-    shoes: '#211e1d',
-    accessory: 'headphones', acc: '#e3e7ed', accDark: '#a8b0bd',
-  },
-  {
-    name: 'rose-backpack',
-    skin: '#e5b38f', skinDark: '#c2906d',
-    hair: '#dbc59c', hairHi: '#f0ddb6', hairDark: '#b39b70',
-    hairStyle: 'short',
-    jacket: '#cc7489', jacketHi: '#e391a4', jacketDark: '#9e5063',
-    pants: '#444b5c', pantsDark: '#2d3240',
-    shoes: '#292321',
-    accessory: 'backpack', acc: '#e3d1a8', accDark: '#baa67b',
-  },
-  {
-    name: 'orange-cap',
-    skin: '#c98e63', skinDark: '#a36d47',
-    hair: '#261c16', hairHi: '#3d2e25', hairDark: '#140e0b',
-    hairStyle: 'cap',
-    hat: '#2d4e6e', hatHi: '#426b91', hatDark: '#1c344a',
-    jacket: '#d97436', jacketHi: '#ed9155', jacketDark: '#a6511e',
-    pants: '#3c4552', pantsDark: '#272e38',
-    shoes: '#242221',
-    accessory: 'none',
-  },
-  {
-    name: 'plum-briefcase',
-    skin: '#a8704e', skinDark: '#825236',
-    hair: '#2e201a', hairHi: '#47342b', hairDark: '#1a110d',
-    hairStyle: 'bob',
-    jacket: '#66507d', jacketHi: '#81689c', jacketDark: '#473559',
-    pants: '#33363f', pantsDark: '#202229',
-    shoes: '#1f1b1a',
-    accessory: 'briefcase', acc: '#523d30', accDark: '#33241b',
-  },
-  {
-    name: 'tan-headphones',
-    skin: '#f2c8a7', skinDark: '#cfa382',
-    hair: '#573926', hairHi: '#734e37', hairDark: '#382215',
-    hairStyle: 'short',
-    jacket: '#ba9568', jacketHi: '#d1ae82', jacketDark: '#8f6d45',
-    pants: '#3c444f', pantsDark: '#272d36',
-    shoes: '#29211c',
-    accessory: 'headphones', acc: '#db4f4b', accDark: '#a3312e',
-  },
+// ---------------------------------------------------------------------------
+// Easy-to-edit Color Palettes (randomized per pedestrian)
+// ---------------------------------------------------------------------------
+export const SKIN_PALETTE = [
+  '#f7d5bc', '#f2c7a5', '#ecc09c', '#e5b38c',
+  '#d89c72', '#c78a5e', '#b3754d', '#99603d',
+  '#824e31', '#693c24',
 ];
 
-// Integer pixel offsets for 5-frame walk cycle:
-// 0: neutral, 1: right mid, 2: right high, 3: left mid, 4: left high
+export const HAIR_PALETTE = [
+  '#1c1716', '#2b1e18', '#3d281c', '#543624',
+  '#6e462d', '#8c3f26', '#a85a32', '#c99b4f',
+  '#dec692', '#7d7a78', '#b8b6b4', '#472a3d',
+];
+
+// Carefully excludes Hero's sky-blue shirt (#55a2b8) so Hero always stands out!
+export const CLOTHING_PALETTE = [
+  '#d6564b', '#c93f4b', '#e07a3d', '#d9a438',
+  '#c9b842', '#7a9442', '#3d7d5b', '#2b6b5e',
+  '#354e7a', '#485680', '#664e82', '#8f6eab',
+  '#b55b7a', '#cc7489', '#7d3143', '#8c4b32',
+  '#b89468', '#8a7965', '#4f545e', '#3a3f4a',
+  '#d6cfc2', '#e08e79', '#5d7360', '#9e6240',
+];
+
+export const PANTS_PALETTE = [
+  '#2d323d', '#3a4252', '#474f5e', '#3b3938',
+  '#4f463e', '#5e5448', '#2a3a4a', '#3d3647',
+  '#52574a', '#262629',
+];
+
+export const ACCENT_PALETTE = [
+  '#e6d5af', '#3f5f7d', '#784a2a', '#de9c83',
+  '#363c42', '#cc4949', '#2d4e6e', '#d9a438',
+  '#4c7a5b', '#e3e7ed', '#7a486e', '#c96840',
+];
+
+// ---------------------------------------------------------------------------
+// 32 Distinct Archetypes (12 original + 20 new designs)
+// ---------------------------------------------------------------------------
+const ARCHETYPES = [
+  // Original 12 silhouettes
+  { hairStyle: 'bob',      outfit: 'jacket',   accessory: 'tote' },
+  { hairStyle: 'short',    outfit: 'hoodie',   accessory: 'backpack' },
+  { hairStyle: 'ponytail', outfit: 'jacket',   accessory: 'none' },
+  { hairStyle: 'short',    outfit: 'blazer',   accessory: 'briefcase' },
+  { hairStyle: 'bun',      outfit: 'sweater',  accessory: 'tote' },
+  { hairStyle: 'beanie',   outfit: 'jacket',   accessory: 'backpack' },
+  { hairStyle: 'long',     outfit: 'trench',   accessory: 'none' },
+  { hairStyle: 'curly',    outfit: 'jacket',   accessory: 'headphones' },
+  { hairStyle: 'short',    outfit: 'sweater',  accessory: 'backpack' },
+  { hairStyle: 'cap',      outfit: 'jacket',   accessory: 'none' },
+  { hairStyle: 'bob',      outfit: 'blazer',   accessory: 'briefcase' },
+  { hairStyle: 'short',    outfit: 'sweater',  accessory: 'headphones' },
+
+  // 20 New Archetypes!
+  { hairStyle: 'pigtails', outfit: 'striped',  accessory: 'backpack' },
+  { hairStyle: 'fedora',   outfit: 'trench',   accessory: 'briefcase' },
+  { hairStyle: 'beret',    outfit: 'sweater',  accessory: 'tote' },
+  { hairStyle: 'mohawk',   outfit: 'vest',     accessory: 'headphones' },
+  { hairStyle: 'bald',     outfit: 'blazer',   accessory: 'messenger' },
+  { hairStyle: 'hoodUp',   outfit: 'hoodie',   accessory: 'backpack' },
+  { hairStyle: 'sunhat',   outfit: 'striped',  accessory: 'grocery' },
+  { hairStyle: 'braids',   outfit: 'jacket',   accessory: 'messenger' },
+  { hairStyle: 'topknot',  outfit: 'vest',     accessory: 'yogaMat' },
+  { hairStyle: 'wavy',     outfit: 'trench',   accessory: 'umbrella' },
+  { hairStyle: 'spiky',    outfit: 'hoodie',   accessory: 'coffee' },
+  { hairStyle: 'parted',   outfit: 'blazer',   accessory: 'coffee' },
+  { hairStyle: 'beanie',   outfit: 'vest',     accessory: 'duffel' },
+  { hairStyle: 'cap',      outfit: 'striped',  accessory: 'skateboard' },
+  { hairStyle: 'bun',      outfit: 'trench',   accessory: 'scarf' },
+  { hairStyle: 'curly',    outfit: 'overalls', accessory: 'tote' },
+  { hairStyle: 'long',     outfit: 'hoodie',   accessory: 'headphones' },
+  { hairStyle: 'ponytail', outfit: 'vest',     accessory: 'yogaMat' },
+  { hairStyle: 'short',    outfit: 'overalls', accessory: 'grocery' },
+  { hairStyle: 'bob',      outfit: 'jacket',   accessory: 'scarf' },
+];
+
+// 5-frame walk cycle on the 44x68 pixel grid
 const FRAME_POSES = [
-  { leftFootY: 31, rightFootY: 31, bob: 0, leftArmDy: 0, rightArmDy: 0 },
-  { leftFootY: 31, rightFootY: 29, bob: 0, leftArmDy: -1, rightArmDy: 1 },
-  { leftFootY: 32, rightFootY: 28, bob: -1, leftArmDy: -1, rightArmDy: 1 },
-  { leftFootY: 29, rightFootY: 31, bob: 0, leftArmDy: 1, rightArmDy: -1 },
-  { leftFootY: 28, rightFootY: 32, bob: -1, leftArmDy: 1, rightArmDy: -1 },
+  { leftFootY: 62, rightFootY: 62, bob: 0,  leftArmDy: 0,  rightArmDy: 0 },
+  { leftFootY: 63, rightFootY: 59, bob: -1, leftArmDy: -1, rightArmDy: 1 },
+  { leftFootY: 64, rightFootY: 56, bob: -2, leftArmDy: -2, rightArmDy: 2 },
+  { leftFootY: 59, rightFootY: 63, bob: -1, leftArmDy: 1,  rightArmDy: -1 },
+  { leftFootY: 56, rightFootY: 64, bob: -2, leftArmDy: 2,  rightArmDy: -2 },
 ];
+
+function shadeHex(hex, delta) {
+  const num = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, Math.max(0, ((num >> 16) & 255) + delta));
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 255) + delta));
+  const b = Math.min(255, Math.max(0, (num & 255) + delta));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+
+function pickRandom(arr, exclude = null) {
+  if (!exclude || arr.length <= 1) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+  let choice = arr[Math.floor(Math.random() * arr.length)];
+  for (let i = 0; i < 6 && choice === exclude; i++) {
+    choice = arr[Math.floor(Math.random() * arr.length)];
+  }
+  return choice;
+}
+
+/**
+ * Generates a randomized color palette for any archetype (skin, hair, clothing, pants, accent).
+ */
+export function randomizePedestrianColors(archetype) {
+  const skin = pickRandom(SKIN_PALETTE);
+  const hair = pickRandom(HAIR_PALETTE);
+  const jacket = pickRandom(CLOTHING_PALETTE);
+  const pants = pickRandom(PANTS_PALETTE, jacket);
+  const acc = pickRandom(ACCENT_PALETTE, jacket);
+  const hat = pickRandom(ACCENT_PALETTE, jacket);
+
+  return {
+    ...archetype,
+    skin,
+    skinDark: shadeHex(skin, -28),
+    hair,
+    hairHi: shadeHex(hair, 26),
+    hairDark: shadeHex(hair, -26),
+    jacket,
+    jacketHi: shadeHex(jacket, 24),
+    jacketDark: shadeHex(jacket, -34),
+    pants,
+    pantsDark: shadeHex(pants, -22),
+    shoes: '#221e1c',
+    acc,
+    accHi: shadeHex(acc, 22),
+    accDark: shadeHex(acc, -30),
+    hat,
+    hatHi: shadeHex(hat, 24),
+    hatDark: shadeHex(hat, -30),
+  };
+}
 
 function px(ctx, x, y, w, h, color) {
   ctx.fillStyle = color;
   ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
 }
 
-function drawPixelPedestrianFrame(ctx, style, frameIdx) {
+/**
+ * Draws one crisp 44x68 pixel-art frame using flat stepped tones (zero smooth gradients).
+ */
+function drawFinePixelFrame(ctx, s, frameIdx) {
   const pose = FRAME_POSES[frameIdx];
   const b = pose.bob;
 
-  // 1. Flat pixel shadow on ground (stepped dark oval, no alpha gradient)
-  px(ctx, 5, 30, 12, 3, 'rgba(30, 30, 34, 0.72)');
-  px(ctx, 4, 31, 14, 1, 'rgba(30, 30, 34, 0.72)');
-  px(ctx, 6, 31, 10, 2, 'rgba(20, 20, 24, 0.55)');
+  // 1. Stepped ground shadow
+  px(ctx, 10, 61, 24, 5, 'rgba(28, 28, 32, 0.72)');
+  px(ctx, 8,  62, 28, 3, 'rgba(28, 28, 32, 0.65)');
+  px(ctx, 12, 62, 20, 3, 'rgba(18, 18, 22, 0.45)');
 
-  // 2. Legs & Shoes (crisp integer pixel blocks)
+  // 2. Legs & Shoes
   const drawLeg = (x, footY) => {
-    const legTop = 26 + b;
-    const legH = Math.max(2, footY - legTop);
-    px(ctx, x, legTop, 3, legH, style.pants);
-    px(ctx, x + 2, legTop, 1, legH, style.pantsDark);
-    px(ctx, x, footY, 3, 2, style.shoes);
+    const legTop = 51 + b;
+    const legH = Math.max(4, footY - legTop);
+    px(ctx, x, legTop, 6, legH, s.pants);
+    px(ctx, x + 4, legTop, 2, legH, s.pantsDark);
+    px(ctx, x, footY, 6, 3, s.shoes);
+    px(ctx, x + 1, footY + 2, 4, 1, '#121010');
   };
-  drawLeg(7, pose.leftFootY);
-  drawLeg(12, pose.rightFootY);
+  drawLeg(14, pose.leftFootY);
+  drawLeg(24, pose.rightFootY);
 
-  // 3. Arms & Hands (flat 2-tone pixel sleeves)
-  const leftArmY = 16 + b + pose.leftArmDy;
-  const rightArmY = 16 + b + pose.rightArmDy;
+  // 3. Arms & Hands
+  const leftArmY = 32 + b + pose.leftArmDy;
+  const rightArmY = 32 + b + pose.rightArmDy;
+  const sleeveCol = s.outfit === 'vest' ? shadeHex(s.jacketHi, 30) : s.jacket;
+  const sleeveDark = s.outfit === 'vest' ? shadeHex(s.jacket, 10) : s.jacketDark;
+
   // Left arm
-  px(ctx, 4, leftArmY, 2, 9, style.jacketDark);
-  px(ctx, 5, leftArmY, 1, 8, style.jacket);
-  px(ctx, 4, leftArmY + 9, 2, 2, style.skin);
+  px(ctx, 8, leftArmY, 4, 17, sleeveDark);
+  px(ctx, 9, leftArmY, 3, 16, sleeveCol);
+  px(ctx, 8, leftArmY + 17, 4, 3, s.skin);
+  px(ctx, 8, leftArmY + 19, 4, 1, s.skinDark);
+
   // Right arm
-  px(ctx, 16, rightArmY, 2, 9, style.jacket);
-  px(ctx, 17, rightArmY, 1, 9, style.jacketDark);
-  px(ctx, 16, rightArmY + 9, 2, 2, style.skin);
+  px(ctx, 32, rightArmY, 4, 17, sleeveCol);
+  px(ctx, 34, rightArmY, 2, 17, sleeveDark);
+  px(ctx, 32, rightArmY + 17, 4, 3, s.skin);
+  px(ctx, 32, rightArmY + 19, 4, 1, s.skinDark);
 
-  // Side accessories (pixelated briefcase or tote)
-  if (style.accessory === 'briefcase') {
-    const by = rightArmY + 7;
-    px(ctx, 18, by, 3, 5, style.accDark);
-    px(ctx, 18, by, 2, 4, style.acc);
-    px(ctx, 19, by - 1, 1, 1, style.accDark);
-  } else if (style.accessory === 'tote') {
-    const ty = leftArmY + 6;
-    px(ctx, 1, ty, 3, 6, style.accDark);
-    px(ctx, 1, ty, 2, 5, style.acc);
-    px(ctx, 2, ty - 2, 1, 2, style.accDark);
+  // Side held accessories
+  if (s.accessory === 'briefcase') {
+    const by = rightArmY + 14;
+    px(ctx, 35, by, 6, 10, s.accDark);
+    px(ctx, 35, by + 1, 5, 8, s.acc);
+    px(ctx, 37, by - 2, 2, 2, s.accDark);
+    px(ctx, 36, by + 4, 4, 1, s.accHi);
+  } else if (s.accessory === 'tote') {
+    const ty = leftArmY + 12;
+    px(ctx, 3, ty, 6, 11, s.accDark);
+    px(ctx, 3, ty + 1, 5, 9, s.acc);
+    px(ctx, 5, ty - 4, 2, 4, s.accDark);
+  } else if (s.accessory === 'grocery') {
+    const gy = leftArmY + 11;
+    px(ctx, 2, gy, 7, 12, '#c7a474');
+    px(ctx, 3, gy + 1, 5, 10, '#d9b98b');
+    px(ctx, 3, gy - 3, 2, 3, '#529448'); // Greens peeking out!
+    px(ctx, 6, gy - 2, 2, 2, '#d6564b');
+  } else if (s.accessory === 'duffel') {
+    const dy = rightArmY + 13;
+    px(ctx, 34, dy, 8, 9, s.accDark);
+    px(ctx, 35, dy + 1, 6, 7, s.acc);
+    px(ctx, 36, dy + 2, 4, 2, s.accHi);
+  } else if (s.accessory === 'coffee') {
+    const cy = rightArmY + 11;
+    px(ctx, 35, cy, 4, 6, '#ece9e4');
+    px(ctx, 35, cy, 4, 1, '#3d281c');
+    px(ctx, 35, cy + 2, 4, 2, '#b88856');
+  } else if (s.accessory === 'umbrella') {
+    const uy = rightArmY + 8;
+    px(ctx, 36, uy, 2, 20, s.accDark);
+    px(ctx, 36, uy + 2, 2, 14, s.acc);
+    px(ctx, 35, uy - 2, 3, 2, '#5c3c24');
   }
 
-  // 4. Torso / Jacket (flat pixel base + crisp left highlight + right/bottom shade)
-  const ty = 15 + b;
-  px(ctx, 6, ty, 10, 12, style.jacket);
-  px(ctx, 7, ty - 1, 8, 2, style.jacketHi);  // Collar
-  px(ctx, 6, ty + 1, 2, 10, style.jacketHi); // Subtle pixel highlight
-  px(ctx, 14, ty + 1, 2, 11, style.jacketDark);
-  px(ctx, 6, ty + 11, 10, 1, style.jacketDark);
+  // 4. Torso / Outfit
+  const ty = 30 + b;
+  const torsoH = s.outfit === 'trench' ? 27 : 23;
+  px(ctx, 12, ty, 20, torsoH, s.jacket);
+  px(ctx, 14, ty - 2, 16, 3, s.jacketHi); // Collar
+  px(ctx, 12, ty + 2, 3, torsoH - 3, s.jacketHi);
+  px(ctx, 29, ty + 2, 3, torsoH - 2, s.jacketDark);
+  px(ctx, 12, ty + torsoH - 2, 20, 2, s.jacketDark);
 
-  // Backpack accessory (crisp pixel pack on back)
-  if (style.accessory === 'backpack') {
-    px(ctx, 7, ty + 2, 8, 8, style.acc);
-    px(ctx, 7, ty + 2, 1, 8, style.accDark);
-    px(ctx, 14, ty + 2, 1, 8, style.accDark);
-    px(ctx, 7, ty + 6, 8, 4, style.accDark);
-    px(ctx, 8, ty + 7, 6, 2, style.acc);
-    px(ctx, 10, ty + 1, 2, 1, style.accDark); // Handle
+  // Outfit-specific pixel details
+  if (s.outfit === 'striped') {
+    for (let sy = ty + 4; sy < ty + torsoH - 3; sy += 5) {
+      px(ctx, 12, sy, 20, 2, '#f0eee9');
+      px(ctx, 29, sy, 3, 2, '#cfccc6');
+    }
+  } else if (s.outfit === 'blazer') {
+    px(ctx, 21, ty + 2, 2, torsoH - 3, s.jacketDark); // Back vent seam
+    px(ctx, 13, ty + 1, 18, 2, s.jacketHi);
+  } else if (s.outfit === 'hoodie' && s.hairStyle !== 'hoodUp') {
+    // Draped hood resting behind neck
+    px(ctx, 14, ty, 16, 7, s.jacketDark);
+    px(ctx, 15, ty + 1, 14, 5, s.jacketHi);
+  } else if (s.outfit === 'overalls') {
+    px(ctx, 14, ty, 4, torsoH, s.pants);
+    px(ctx, 26, ty, 4, torsoH, s.pants);
+    px(ctx, 12, ty + 10, 20, torsoH - 10, s.pants);
+    px(ctx, 29, ty + 10, 3, torsoH - 10, s.pantsDark);
+  } else if (s.outfit === 'trench') {
+    // Belt across waist
+    px(ctx, 12, ty + 14, 20, 3, s.jacketDark);
+    px(ctx, 20, ty + 14, 4, 3, s.accHi);
   }
 
-  // 5. Head, Ears & Neck (pixelated chibi head matching Hero proportions)
-  const hy = 2 + b;
+  // Back-worn accessories
+  if (s.accessory === 'backpack') {
+    px(ctx, 14, ty + 4, 16, 16, s.acc);
+    px(ctx, 14, ty + 4, 2, 16, s.accDark);
+    px(ctx, 28, ty + 4, 2, 16, s.accDark);
+    px(ctx, 16, ty + 5, 12, 3, s.accHi);
+    px(ctx, 15, ty + 12, 14, 7, s.accDark);
+    px(ctx, 16, ty + 13, 12, 5, s.acc);
+    px(ctx, 19, ty + 2, 6, 2, s.accDark); // Top strap loop
+  } else if (s.accessory === 'messenger') {
+    // Diagonal strap across back + low hip bag
+    for (let k = 0; k < 14; k++) {
+      px(ctx, 13 + k, ty + 2 + k, 3, 2, s.accDark);
+    }
+    px(ctx, 22, ty + 14, 11, 9, s.accDark);
+    px(ctx, 23, ty + 15, 9, 7, s.acc);
+  } else if (s.accessory === 'yogaMat') {
+    // Rolled yoga mat strapped diagonally across back
+    for (let k = 0; k < 16; k++) {
+      px(ctx, 11 + k, ty + 1 + Math.round(k * 0.9), 5, 4, s.acc);
+      px(ctx, 11 + k, ty + 4 + Math.round(k * 0.9), 5, 1, s.accDark);
+    }
+  } else if (s.accessory === 'skateboard') {
+    // Skateboard tucked vertically behind backpack
+    px(ctx, 18, ty - 1, 8, 26, s.accDark);
+    px(ctx, 19, ty, 6, 24, s.acc);
+    px(ctx, 17, ty + 5, 10, 2, '#d8dce3');
+    px(ctx, 17, ty + 18, 10, 2, '#d8dce3');
+  } else if (s.accessory === 'scarf') {
+    px(ctx, 13, ty - 1, 18, 5, s.acc);
+    px(ctx, 13, ty + 3, 18, 1, s.accDark);
+    px(ctx, 24, ty + 3, 5, 10, s.acc);
+    px(ctx, 25, ty + 11, 4, 2, s.accDark);
+  }
+
+  // 5. Head, Ears & Neck
+  const hy = 4 + b;
   // Ears
-  px(ctx, 3, hy + 6, 1, 3, style.skinDark);
-  px(ctx, 18, hy + 6, 1, 3, style.skinDark);
-  // Neck / lower skin rim
-  px(ctx, 5, hy + 10, 12, 3, style.skin);
-  px(ctx, 6, hy + 12, 10, 1, style.skinDark);
+  px(ctx, 6, hy + 12, 3, 6, s.skinDark);
+  px(ctx, 7, hy + 13, 2, 4, s.skin);
+  px(ctx, 35, hy + 12, 3, 6, s.skinDark);
+  px(ctx, 35, hy + 13, 2, 4, s.skin);
 
-  // 6. Hair / Hat (stepped 3-tone pixel art, zero gradients)
-  if (style.hairStyle === 'beanie') {
-    px(ctx, 4, hy + 8, 14, 3, style.hair);
-    px(ctx, 5, hy + 1, 12, 7, style.hat);
-    px(ctx, 4, hy + 2, 14, 6, style.hat);
-    px(ctx, 6, hy + 1, 5, 2, style.hatHi);
-    px(ctx, 4, hy + 6, 14, 2, style.hatDark); // Ribbed cuff
-    px(ctx, 16, hy + 2, 2, 6, style.hatDark);
-  } else if (style.hairStyle === 'cap') {
-    px(ctx, 4, hy + 8, 14, 3, style.hair);
-    px(ctx, 5, hy + 1, 12, 7, style.hat);
-    px(ctx, 4, hy + 2, 14, 6, style.hat);
-    px(ctx, 6, hy + 1, 5, 2, style.hatHi);
-    px(ctx, 16, hy + 2, 2, 6, style.hatDark);
-    // Cap back-strap cutout
-    px(ctx, 9, hy + 7, 4, 2, style.hair);
-    px(ctx, 9, hy + 7, 4, 1, '#dce0e6');
-  } else if (style.hairStyle === 'curly') {
-    px(ctx, 5, hy, 12, 11, style.hair);
-    px(ctx, 3, hy + 2, 16, 8, style.hair);
-    px(ctx, 4, hy + 1, 2, 2, style.hairHi);
-    px(ctx, 8, hy + 1, 3, 2, style.hairHi);
-    px(ctx, 13, hy + 2, 2, 2, style.hairHi);
-    px(ctx, 4, hy + 9, 14, 2, style.hairDark);
-    px(ctx, 17, hy + 4, 2, 5, style.hairDark);
+  // Head/neck skin shape
+  px(ctx, 10, hy + 5, 24, 20, s.skin);
+  px(ctx, 9,  hy + 8, 26, 15, s.skin);
+  px(ctx, 12, hy + 23, 20, 3, s.skinDark);
+
+  // 6. Hair & Headwear (18 distinct pixel styles!)
+  if (s.hairStyle === 'bald') {
+    px(ctx, 11, hy + 2, 22, 22, s.skin);
+    px(ctx, 9,  hy + 5, 26, 16, s.skin);
+    px(ctx, 14, hy + 4, 8, 4, shadeHex(s.skin, 20)); // Shine
+    px(ctx, 9,  hy + 15, 26, 4, s.hair);            // Hair fringe around lower back
+    px(ctx, 10, hy + 18, 24, 2, s.hairDark);
+  } else if (s.hairStyle === 'beanie') {
+    px(ctx, 9,  hy + 15, 26, 6, s.hair);
+    px(ctx, 10, hy + 2, 24, 15, s.hat);
+    px(ctx, 8,  hy + 5, 28, 12, s.hat);
+    px(ctx, 12, hy + 3, 10, 4, s.hatHi);
+    px(ctx, 8,  hy + 13, 28, 4, s.hatDark);
+    px(ctx, 32, hy + 5, 4, 12, s.hatDark);
+  } else if (s.hairStyle === 'cap') {
+    px(ctx, 9,  hy + 15, 26, 6, s.hair);
+    px(ctx, 10, hy + 2, 24, 15, s.hat);
+    px(ctx, 8,  hy + 5, 28, 12, s.hat);
+    px(ctx, 12, hy + 3, 10, 4, s.hatHi);
+    px(ctx, 32, hy + 5, 4, 12, s.hatDark);
+    px(ctx, 18, hy + 14, 8, 4, s.hair);
+    px(ctx, 18, hy + 14, 8, 2, '#e2e6ec');
+  } else if (s.hairStyle === 'fedora') {
+    px(ctx, 9,  hy + 15, 26, 6, s.hair);
+    px(ctx, 5,  hy + 12, 34, 4, s.hatDark); // Brim
+    px(ctx, 6,  hy + 11, 32, 2, s.hat);
+    px(ctx, 11, hy + 2, 22, 10, s.hat);
+    px(ctx, 13, hy + 3, 9, 3, s.hatHi);
+    px(ctx, 11, hy + 9, 22, 2, '#221f26');  // Hatband
+  } else if (s.hairStyle === 'sunhat') {
+    px(ctx, 9,  hy + 16, 26, 8, s.hair);
+    px(ctx, 4,  hy + 10, 36, 5, '#e0c794');
+    px(ctx, 5,  hy + 9, 34, 3, '#edd8aa');
+    px(ctx, 11, hy + 2, 22, 8, '#e0c794');
+    px(ctx, 11, hy + 8, 22, 2, s.hat);
+  } else if (s.hairStyle === 'beret') {
+    px(ctx, 9,  hy + 13, 26, 9, s.hair);
+    px(ctx, 7,  hy + 3, 28, 11, s.hat);
+    px(ctx, 10, hy + 1, 22, 5, s.hatHi);
+    px(ctx, 21, hy, 3, 2, s.hatDark); // Stem
+    px(ctx, 8,  hy + 11, 26, 3, s.hatDark);
+  } else if (s.hairStyle === 'hoodUp') {
+    px(ctx, 8,  hy + 1, 28, 24, s.jacket);
+    px(ctx, 10, hy, 24, 25, s.jacket);
+    px(ctx, 11, hy + 2, 8, 10, s.jacketHi);
+    px(ctx, 31, hy + 3, 5, 21, s.jacketDark);
+    px(ctx, 10, hy + 22, 24, 4, s.jacketDark);
+  } else if (s.hairStyle === 'curly') {
+    px(ctx, 10, hy, 24, 22, s.hair);
+    px(ctx, 6,  hy + 4, 32, 16, s.hair);
+    px(ctx, 8,  hy + 2, 5, 4, s.hairHi);
+    px(ctx, 16, hy + 1, 6, 4, s.hairHi);
+    px(ctx, 26, hy + 3, 5, 4, s.hairHi);
+    px(ctx, 8,  hy + 18, 28, 4, s.hairDark);
+    px(ctx, 34, hy + 8, 4, 10, s.hairDark);
+  } else if (s.hairStyle === 'mohawk') {
+    px(ctx, 10, hy + 3, 24, 18, s.skin);
+    px(ctx, 18, hy - 1, 8, 23, s.hair);
+    px(ctx, 19, hy, 4, 16, s.hairHi);
+    px(ctx, 24, hy + 1, 2, 20, s.hairDark);
+  } else if (s.hairStyle === 'spiky') {
+    px(ctx, 9,  hy + 4, 26, 16, s.hair);
+    px(ctx, 10, hy, 4, 5, s.hair);
+    px(ctx, 16, hy - 1, 5, 6, s.hairHi);
+    px(ctx, 23, hy, 5, 5, s.hair);
+    px(ctx, 29, hy + 1, 4, 4, s.hairDark);
+    px(ctx, 31, hy + 5, 4, 15, s.hairDark);
   } else {
-    const hairH = style.hairStyle === 'long' ? 14 : style.hairStyle === 'bob' ? 12 : 10;
-    px(ctx, 5, hy, 12, hairH, style.hair);
-    px(ctx, 4, hy + 1, 14, hairH - 1, style.hair);
-    // Crisp 16-bit pixel highlight strip across crown
-    px(ctx, 6, hy + 1, 6, 2, style.hairHi);
-    px(ctx, 5, hy + 2, 2, 3, style.hairHi);
-    // Pixel shadow on right & bottom hem of hair
-    px(ctx, 16, hy + 2, 2, hairH - 2, style.hairDark);
-    px(ctx, 5, hy + hairH - 1, 12, 1, style.hairDark);
+    const hairH = (s.hairStyle === 'long' || s.hairStyle === 'wavy') ? 28
+      : (s.hairStyle === 'bob' || s.hairStyle === 'braids') ? 24 : 20;
+    px(ctx, 10, hy + 1, 24, hairH, s.hair);
+    px(ctx, 8,  hy + 3, 28, hairH - 3, s.hair);
+    px(ctx, 12, hy + 3, 11, 4, s.hairHi);
+    px(ctx, 10, hy + 5, 4, 6, s.hairHi);
+    px(ctx, 32, hy + 5, 4, hairH - 5, s.hairDark);
+    px(ctx, 10, hy + hairH - 2, 24, 2, s.hairDark);
 
-    if (style.hairStyle === 'bun') {
-      px(ctx, 8, hy + 3, 6, 1, '#e06377'); // Hair tie
-      px(ctx, 9, hy, 4, 3, style.hairDark);
-      px(ctx, 9, hy + 1, 3, 2, style.hairHi);
-    } else if (style.hairStyle === 'ponytail') {
-      px(ctx, 9, hy + 8, 4, 1, '#c94040'); // Hair tie
-      px(ctx, 9, hy + 9, 4, 5, style.hair);
-      px(ctx, 10, hy + 10, 2, 3, style.hairHi);
-      px(ctx, 10, hy + 14, 2, 1, style.hairDark);
+    if (s.hairStyle === 'parted') {
+      px(ctx, 17, hy + 2, 2, 10, s.skinDark);
+    } else if (s.hairStyle === 'wavy') {
+      px(ctx, 7,  hy + 15, 3, 10, s.hair);
+      px(ctx, 34, hy + 15, 3, 10, s.hairDark);
+    } else if (s.hairStyle === 'bun') {
+      px(ctx, 16, hy + 6, 12, 2, s.hat);
+      px(ctx, 18, hy, 8, 6, s.hairDark);
+      px(ctx, 18, hy + 1, 6, 4, s.hairHi);
+    } else if (s.hairStyle === 'topknot') {
+      px(ctx, 18, hy - 2, 8, 5, s.hair);
+      px(ctx, 19, hy - 1, 4, 3, s.hairHi);
+      px(ctx, 17, hy + 3, 10, 2, s.hat);
+    } else if (s.hairStyle === 'ponytail') {
+      px(ctx, 18, hy + 16, 8, 2, s.hat);
+      px(ctx, 18, hy + 18, 8, 10, s.hair);
+      px(ctx, 19, hy + 19, 4, 6, s.hairHi);
+      px(ctx, 20, hy + 27, 4, 2, s.hairDark);
+    } else if (s.hairStyle === 'pigtails') {
+      px(ctx, 6,  hy + 12, 4, 2, s.hat);
+      px(ctx, 5,  hy + 14, 5, 11, s.hair);
+      px(ctx, 34, hy + 12, 4, 2, s.hat);
+      px(ctx, 34, hy + 14, 5, 11, s.hairDark);
+    } else if (s.hairStyle === 'braids') {
+      px(ctx, 12, hy + 18, 5, 12, s.hairDark);
+      px(ctx, 13, hy + 20, 3, 2, s.hairHi);
+      px(ctx, 13, hy + 24, 3, 2, s.hairHi);
+      px(ctx, 27, hy + 18, 5, 12, s.hairDark);
+      px(ctx, 28, hy + 20, 3, 2, s.hairHi);
+      px(ctx, 28, hy + 24, 3, 2, s.hairHi);
     }
   }
 
-  // Over-ear pixel headphones
-  if (style.accessory === 'headphones') {
-    px(ctx, 5, hy, 12, 1, style.acc);
-    px(ctx, 3, hy + 1, 2, 4, style.acc);
-    px(ctx, 17, hy + 1, 2, 4, style.acc);
-    px(ctx, 2, hy + 5, 2, 4, style.accDark);
-    px(ctx, 18, hy + 5, 2, 4, style.accDark);
-    px(ctx, 3, hy + 6, 1, 2, style.acc);
-    px(ctx, 18, hy + 6, 1, 2, style.acc);
+  // Over-ear headphones
+  if (s.accessory === 'headphones') {
+    px(ctx, 10, hy + 1, 24, 2, s.acc);
+    px(ctx, 6,  hy + 3, 4, 8, s.acc);
+    px(ctx, 34, hy + 3, 4, 8, s.acc);
+    px(ctx, 4,  hy + 10, 4, 8, s.accDark);
+    px(ctx, 36, hy + 10, 4, 8, s.accDark);
+    px(ctx, 5,  hy + 12, 2, 4, s.accHi);
+    px(ctx, 37, hy + 12, 2, 4, s.accHi);
   }
 }
 
 /**
- * Pre-renders all pedestrian variants (5 frames each) onto crisp native 22x34 pixel canvases.
+ * Mitchell-Netravali bicubic kernel (B = 1/3, C = 1/3) — Photoshop-style crisp
+ * bicubic downsampling that gives pixel edges subtle organic fuzziness without
+ * turning flat pixel fills into smooth gradients.
+ */
+function mitchellWeight(x) {
+  const ax = Math.abs(x);
+  if (ax < 1) {
+    return ((7 * ax * ax * ax) - (12 * ax * ax) + (16 / 3)) / 6;
+  }
+  if (ax < 2) {
+    return (-(7 / 3) * ax * ax * ax + 12 * ax * ax - 20 * ax + (32 / 3)) / 6;
+  }
+  return 0;
+}
+
+function bicubicResampleCanvas(srcCanvas, dstW, dstH) {
+  const srcW = srcCanvas.width;
+  const srcH = srcCanvas.height;
+  const sCtx = srcCanvas.getContext('2d');
+  const src = sCtx.getImageData(0, 0, srcW, srcH).data;
+
+  // Horizontal pass: srcW x srcH -> dstW x srcH (premultiplied alpha to avoid dark edge halos)
+  const tmp = new Float32Array(dstW * srcH * 4);
+  const scaleX = srcW / dstW;
+
+  for (let dx = 0; dx < dstW; dx++) {
+    const cx = (dx + 0.5) * scaleX - 0.5;
+    const x0 = Math.floor(cx);
+    const weights = [0, 0, 0, 0];
+    let wSum = 0;
+    for (let k = -1; k <= 2; k++) {
+      const w = mitchellWeight((x0 + k - cx));
+      weights[k + 1] = w;
+      wSum += w;
+    }
+    for (let i = 0; i < 4; i++) weights[i] /= wSum;
+
+    for (let y = 0; y < srcH; y++) {
+      let r = 0, g = 0, b = 0, a = 0;
+      for (let k = -1; k <= 2; k++) {
+        const sx = Math.min(srcW - 1, Math.max(0, x0 + k));
+        const idx = (y * srcW + sx) * 4;
+        const w = weights[k + 1];
+        const alpha = src[idx + 3] / 255;
+        r += src[idx] * alpha * w;
+        g += src[idx + 1] * alpha * w;
+        b += src[idx + 2] * alpha * w;
+        a += alpha * w;
+      }
+      const outIdx = (y * dstW + dx) * 4;
+      tmp[outIdx] = r;
+      tmp[outIdx + 1] = g;
+      tmp[outIdx + 2] = b;
+      tmp[outIdx + 3] = a;
+    }
+  }
+
+  // Vertical pass: dstW x srcH -> dstW x dstH
+  const dstCanvas = document.createElement('canvas');
+  dstCanvas.width = dstW;
+  dstCanvas.height = dstH;
+  const dCtx = dstCanvas.getContext('2d');
+  const dstImg = dCtx.createImageData(dstW, dstH);
+  const dst = dstImg.data;
+  const scaleY = srcH / dstH;
+
+  for (let dy = 0; dy < dstH; dy++) {
+    const cy = (dy + 0.5) * scaleY - 0.5;
+    const y0 = Math.floor(cy);
+    const weights = [0, 0, 0, 0];
+    let wSum = 0;
+    for (let k = -1; k <= 2; k++) {
+      const w = mitchellWeight((y0 + k - cy));
+      weights[k + 1] = w;
+      wSum += w;
+    }
+    for (let i = 0; i < 4; i++) weights[i] /= wSum;
+
+    for (let dx = 0; dx < dstW; dx++) {
+      let r = 0, g = 0, b = 0, a = 0;
+      for (let k = -1; k <= 2; k++) {
+        const sy = Math.min(srcH - 1, Math.max(0, y0 + k));
+        const idx = (sy * dstW + dx) * 4;
+        const w = weights[k + 1];
+        r += tmp[idx] * w;
+        g += tmp[idx + 1] * w;
+        b += tmp[idx + 2] * w;
+        a += tmp[idx + 3] * w;
+      }
+      const outIdx = (dy * dstW + dx) * 4;
+      const clampedA = Math.min(1, Math.max(0, a));
+      if (clampedA > 0.004) {
+        dst[outIdx] = Math.min(255, Math.max(0, Math.round(r / clampedA)));
+        dst[outIdx + 1] = Math.min(255, Math.max(0, Math.round(g / clampedA)));
+        dst[outIdx + 2] = Math.min(255, Math.max(0, Math.round(b / clampedA)));
+        dst[outIdx + 3] = Math.round(clampedA * 255);
+      }
+    }
+  }
+
+  dCtx.putImageData(dstImg, 0, 0);
+  return dstCanvas;
+}
+
+/**
+ * Pre-renders all 32 pedestrian archetypes with freshly randomized skin, hair,
+ * and clothing colors through the bicubic downsampler (5 frames each).
  */
 export function buildPedestrianSprites() {
-  return PEDESTRIAN_STYLES.map((style) => {
+  const master = document.createElement('canvas');
+  master.width = MASTER_W;
+  master.height = MASTER_H;
+  const mCtx = master.getContext('2d');
+  mCtx.imageSmoothingEnabled = false;
+
+  return ARCHETYPES.map((arch) => {
+    const style = randomizePedestrianColors(arch);
     const frames = [];
     for (let f = 0; f < 5; f++) {
-      const canvas = document.createElement('canvas');
-      canvas.width = PX_W;
-      canvas.height = PX_H;
-      const ctx = canvas.getContext('2d');
-      ctx.imageSmoothingEnabled = false;
-      drawPixelPedestrianFrame(ctx, style, f);
-      frames.push(canvas);
+      mCtx.clearRect(0, 0, MASTER_W, MASTER_H);
+      drawFinePixelFrame(mCtx, style, f);
+      frames.push(bicubicResampleCanvas(master, OUT_W, OUT_H));
     }
     return frames;
   });
 }
 
-export const PEDESTRIAN_VARIANT_COUNT = PEDESTRIAN_STYLES.length;
+export const PEDESTRIAN_VARIANT_COUNT = ARCHETYPES.length;

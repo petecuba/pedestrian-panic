@@ -36,6 +36,22 @@ export class InputManager {
     this.canvas.addEventListener('pointerdown', this._onPointerDown);
     window.addEventListener('pointerup', this._onPointerUp);
     window.addEventListener('pointercancel', this._onPointerUp);
+
+    // Prevent iOS Safari double-tap-to-zoom, pinch-zoom, and long-press image callouts on canvas
+    const preventCanvasTouch = (e) => {
+      if (e.cancelable) e.preventDefault();
+    };
+    this.canvas.addEventListener('touchstart', preventCanvasTouch, { passive: false });
+    this.canvas.addEventListener('touchmove', preventCanvasTouch, { passive: false });
+    this.canvas.addEventListener('touchend', preventCanvasTouch, { passive: false });
+    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Block Safari pinch-zoom gesture events outside scrollable panels
+    const preventGesture = (e) => {
+      if (e.cancelable) e.preventDefault();
+    };
+    document.addEventListener('gesturestart', preventGesture, { passive: false });
+    document.addEventListener('gesturechange', preventGesture, { passive: false });
   }
 
   _onKeyDown(e) {
