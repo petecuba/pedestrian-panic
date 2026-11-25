@@ -65,6 +65,62 @@
 
           <div class="tune-scroll">
             <div class="tune-group">
+              <div class="tune-group-title">Powerups (Test Mode)</div>
+              <div class="powerup-grid" role="group" aria-label="Powerup Test Toggles">
+                <button type="button" class="powerup-btn" data-powerup="none">Off</button>
+                <button type="button" class="powerup-btn" data-powerup="couple">Couple</button>
+                <button type="button" class="powerup-btn" data-powerup="strollers">Strollers</button>
+                <button type="button" class="powerup-btn" data-powerup="tourists">Tourists</button>
+              </div>
+              <div id="powerup-summary" class="powerup-summary">Tap a powerup above to test &amp; tune it</div>
+
+              <div id="powerup-panel-couple" class="powerup-subpanel" hidden>
+                <label class="slider-row">
+                  <div class="slider-meta"><span>Couple Half-Width</span><output id="val-coupleWidth"></output></div>
+                  <input type="range" id="tune-coupleWidth" min="24" max="54" step="1" />
+                </label>
+                <label class="slider-row">
+                  <div class="slider-meta"><span>Couple Weight Bonus</span><output id="val-coupleWeightBonus"></output></div>
+                  <input type="range" id="tune-coupleWeightBonus" min="0" max="300" step="10" />
+                </label>
+                <label class="slider-row">
+                  <div class="slider-meta"><span>Couple Slowdown Power +</span><output id="val-coupleSlowPowerBonus"></output></div>
+                  <input type="range" id="tune-coupleSlowPowerBonus" min="0" max="350" step="10" />
+                </label>
+              </div>
+
+              <div id="powerup-panel-strollers" class="powerup-subpanel" hidden>
+                <label class="slider-row">
+                  <div class="slider-meta"><span>Strollers Half-Width</span><output id="val-strollersWidth"></output></div>
+                  <input type="range" id="tune-strollersWidth" min="32" max="72" step="1" />
+                </label>
+                <label class="slider-row">
+                  <div class="slider-meta"><span>Strollers Weight Bonus</span><output id="val-strollersWeightBonus"></output></div>
+                  <input type="range" id="tune-strollersWeightBonus" min="0" max="450" step="10" />
+                </label>
+                <label class="slider-row">
+                  <div class="slider-meta"><span>Strollers Slowdown Power +</span><output id="val-strollersSlowPowerBonus"></output></div>
+                  <input type="range" id="tune-strollersSlowPowerBonus" min="0" max="500" step="10" />
+                </label>
+              </div>
+
+              <div id="powerup-panel-tourists" class="powerup-subpanel" hidden>
+                <label class="slider-row">
+                  <div class="slider-meta"><span>Tourists Half-Width</span><output id="val-touristsWidth"></output></div>
+                  <input type="range" id="tune-touristsWidth" min="44" max="92" step="1" />
+                </label>
+                <label class="slider-row">
+                  <div class="slider-meta"><span>Tourists Weight Bonus</span><output id="val-touristsWeightBonus"></output></div>
+                  <input type="range" id="tune-touristsWeightBonus" min="0" max="600" step="10" />
+                </label>
+                <label class="slider-row">
+                  <div class="slider-meta"><span>Tourists Slowdown Power +</span><output id="val-touristsSlowPowerBonus"></output></div>
+                  <input type="range" id="tune-touristsSlowPowerBonus" min="0" max="650" step="10" />
+                </label>
+              </div>
+            </div>
+
+            <div class="tune-group">
               <div class="tune-group-title">Hero</div>
 
               <label class="slider-row">

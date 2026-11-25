@@ -114,15 +114,17 @@ export class GameSimulation {
       hh: H.HALF_H,
       rTop: H.CORNER_R_TOP,
       rBot: H.CORNER_R_BOT,
+      powerup: CONFIG.POWERUPS.ACTIVE || 'none',
       worldSpeed: H.BASE_SPEED,
       walkPhase: 0,
       isSlowing: false,
-      slowTimer: 0,       // 0 .. 1.0s
-      cooldownTimer: 0,   // 0 .. 0.75s
+      slowTimer: 0,
+      cooldownTimer: 0,
       slowLatch: false,
-      slowBlend: 0,       // Linear 0..1 envelope -> smoothstepped for silky ease-in / ease-out
+      slowBlend: 0,
       pushedAmount: 0,
     };
+    this.applyPowerupDimensions();
 
     this.pedestrians = [];
     this.nextPedId = 1;
@@ -167,15 +169,41 @@ export class GameSimulation {
     return out;
   }
 
+  getActivePowerupSpec() {
+    const active = CONFIG.POWERUPS.ACTIVE || 'none';
+    if (active !== 'none' && CONFIG.POWERUPS[active]) {
+      return { name: active, ...CONFIG.POWERUPS[active] };
+    }
+    return {
+      name: 'none',
+      halfW: CONFIG.HERO.HALF_W,
+      halfH: CONFIG.HERO.HALF_H,
+      weightBonus: 0,
+      slowPowerBonus: 0,
+    };
+  }
+
+  applyPowerupDimensions() {
+    const H = CONFIG.HERO;
+    const pw = this.getActivePowerupSpec();
+    this.hero.powerup = pw.name;
+    this.hero.hw = pw.halfW;
+    this.hero.hh = pw.halfH;
+    this.hero.rTop = Math.min(H.CORNER_R_TOP, pw.halfW - 2);
+    this.hero.rBot = Math.min(H.CORNER_R_BOT, pw.halfW - 2);
+    // Keep wider powerups cleanly inside sidewalk bounds
+    const minX = CONFIG.CURB_X + this.hero.hw;
+    const maxX = CONFIG.RIGHT_WALL_X - this.hero.hw;
+    this.hero.x = clamp(this.hero.x, minX, maxX);
+  }
+
   /**
-   * Sync live-tuned CONFIG values (corner radii, weights) onto active entities immediately
+   * Sync live-tuned CONFIG values (powerups, corner radii, weights) onto active entities immediately
    * so adjusting sliders in the pause drawer takes effect right away on resume.
    */
   syncLiveConfig() {
-    const H = CONFIG.HERO;
     const P = CONFIG.PED;
-    this.hero.rBot = H.CORNER_R_BOT;
-    this.hero.rTop = H.CORNER_R_TOP;
+    this.applyPowerupDimensions();
 
     const progress = clamp(this.elapsed / CONFIG.SPAWN.RAMP_DURATION, 0, 1);
     for (const ped of this.pedestrians) {
@@ -334,9 +362,11 @@ export class GameSimulation {
     }
 
     // 6. Unified smooth Hero vertical velocity:
-    //    - Effective resistance mass = BASE_MASS + SLOW_EXTRA_MASS * slowEase.
-    //    - Upward push scales with net crowd weight & PED.FORCE_MULT, strictly capped to stackCapSpeed.
-    const effectiveMass = H.BASE_MASS + H.SLOW_EXTRA_MASS * slowEase;
+    //    - Effective resistance mass includes any active powerup's weight & slowdown power bonuses!
+    const pw = this.getActivePowerupSpec();
+    const totalBaseMass = H.BASE_MASS + pw.weightBonus;
+    const totalSlowPower = H.SLOW_EXTRA_MASS + pw.slowPowerBonus;
+    const effectiveMass = totalBaseMass + totalSlowPower * slowEase;
     const netCrowdForce = totalCrowdWeight - effectiveMass;
 
     let targetHeroVy = 0;

@@ -9,7 +9,7 @@ import { SoundEngine } from './sound.js';
 import { PEDESTRIAN_VARIANT_COUNT } from './pedestrianArt.js';
 
 const HIGH_SCORE_KEY = 'pedestrian_panic_high_score_v1';
-const TUNING_KEY = 'pedestrian_panic_tuning_v2';
+const TUNING_KEY = 'pedestrian_panic_tuning_v3';
 
 const canvas = document.getElementById('game-canvas');
 const splashOverlay = document.getElementById('splash-screen');
@@ -89,7 +89,49 @@ const SLIDER_SPECS = [
   { key: 'pedFriction', fmt: (v) => `${Number(v).toFixed(2)}` },
   { key: 'tiltSensitivity', fmt: (v) => `${Number(v).toFixed(1)}x` },
   { key: 'spawnRate', fmt: (v) => `${Number(v).toFixed(2)}x` },
+  { key: 'coupleWidth', fmt: (v) => `${Math.round(v)} px` },
+  { key: 'coupleWeightBonus', fmt: (v) => `+${Math.round(v)}` },
+  { key: 'coupleSlowPowerBonus', fmt: (v) => `+${Math.round(v)}` },
+  { key: 'strollersWidth', fmt: (v) => `${Math.round(v)} px` },
+  { key: 'strollersWeightBonus', fmt: (v) => `+${Math.round(v)}` },
+  { key: 'strollersSlowPowerBonus', fmt: (v) => `+${Math.round(v)}` },
+  { key: 'touristsWidth', fmt: (v) => `${Math.round(v)} px` },
+  { key: 'touristsWeightBonus', fmt: (v) => `+${Math.round(v)}` },
+  { key: 'touristsSlowPowerBonus', fmt: (v) => `+${Math.round(v)}` },
 ];
+
+const powerupButtons = Array.from(document.querySelectorAll('.powerup-btn'));
+const powerupSummaryEl = document.getElementById('powerup-summary');
+const powerupPanels = {
+  couple: document.getElementById('powerup-panel-couple'),
+  strollers: document.getElementById('powerup-panel-strollers'),
+  tourists: document.getElementById('powerup-panel-tourists'),
+};
+
+function syncPowerupUI() {
+  const active = tuning.activePowerup || 'none';
+  for (const btn of powerupButtons) {
+    btn.classList.toggle('active', btn.dataset.powerup === active);
+  }
+  for (const [name, panel] of Object.entries(powerupPanels)) {
+    if (panel) panel.hidden = active !== name;
+  }
+  if (powerupSummaryEl) {
+    if (active === 'none') {
+      powerupSummaryEl.textContent = 'Tap a powerup above to test & tune it';
+    } else {
+      const pw = CONFIG.POWERUPS[active];
+      const totalW = Math.round(CONFIG.HERO.BASE_MASS + pw.weightBonus);
+      const totalSlow = Math.round(CONFIG.HERO.SLOW_EXTRA_MASS + pw.slowPowerBonus);
+      const names = {
+        couple: 'Couple Holding Hands',
+        strollers: 'Side-by-Side Strollers',
+        tourists: 'Tourist Family w/ Maps',
+      };
+      powerupSummaryEl.textContent = `${names[active]} · Weight ${totalW} · Slow Power ${totalSlow}`;
+    }
+  }
+}
 
 function syncTuningUI() {
   for (const spec of SLIDER_SPECS) {
@@ -100,10 +142,23 @@ function syncTuningUI() {
   }
   const hbEl = document.getElementById('tune-showHitboxes');
   if (hbEl) hbEl.checked = Boolean(tuning.showHitboxes);
+  syncPowerupUI();
 }
 
 function initTuningControls() {
   syncTuningUI();
+
+  for (const btn of powerupButtons) {
+    btn.addEventListener('click', () => {
+      const chosen = btn.dataset.powerup;
+      // Tapping an already-active powerup toggles it back Off!
+      tuning.activePowerup = (chosen !== 'none' && tuning.activePowerup === chosen) ? 'none' : chosen;
+      applyTuningToConfig(tuning);
+      sim.syncLiveConfig();
+      syncPowerupUI();
+      saveTuning();
+    });
+  }
 
   for (const spec of SLIDER_SPECS) {
     const el = document.getElementById(`tune-${spec.key}`);
@@ -115,6 +170,7 @@ function initTuningControls() {
       if (out) out.textContent = spec.fmt(val);
       applyTuningToConfig(tuning);
       sim.syncLiveConfig();
+      syncPowerupUI();
       saveTuning();
     });
   }

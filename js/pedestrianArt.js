@@ -574,7 +574,7 @@ function mitchellWeight(x) {
   return 0;
 }
 
-function bicubicResampleCanvas(srcCanvas, dstW, dstH) {
+export function bicubicResampleCanvas(srcCanvas, dstW, dstH) {
   const srcW = srcCanvas.width;
   const srcH = srcCanvas.height;
   const sCtx = srcCanvas.getContext('2d');

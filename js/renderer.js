@@ -11,6 +11,7 @@
 import { CONFIG } from './config.js';
 import { buildHeroSprites, buildPedestrianSprites, buildPigeonSprites } from './pedestrianArt.js';
 import { buildAwningSprites } from './awningArt.js';
+import { buildPowerupSprites } from './powerupArt.js';
 
 const WALK_CYCLE = [0, 1, 2, 1, 0, 3, 4, 3];
 
@@ -23,6 +24,7 @@ export class GameRenderer {
 
     this.sidewalkTile = this.buildSidewalkTile();
     this.heroFrames = buildHeroSprites();
+    this.powerupSprites = buildPowerupSprites();
     this.pedSprites = buildPedestrianSprites();
     this.pigeonSprites = buildPigeonSprites();
     this.awningPool = buildAwningSprites();
@@ -522,13 +524,12 @@ export class GameRenderer {
   }
 
   drawHero(ctx, hero) {
-    const w = CONFIG.HERO.SPRITE_W;
-    const h = CONFIG.HERO.SPRITE_H;
-    const frameIdx = WALK_CYCLE[Math.floor(hero.walkPhase) % WALK_CYCLE.length];
-    const sprite = this.heroFrames[frameIdx] || this.heroFrames[0];
+    const activePowerup = hero.powerup && hero.powerup !== 'none'
+      ? this.powerupSprites[hero.powerup]
+      : null;
 
     ctx.save();
-    const lean = (hero.vx / CONFIG.HERO.LATERAL_SPEED) * 0.08;
+    const lean = (hero.vx / CONFIG.HERO.LATERAL_SPEED) * (activePowerup ? 0.045 : 0.08);
     const blend = hero.slowBlend || 0;
     const squashY = 1.0 - 0.05 * blend;
     const stretchX = 1.0 + 0.05 * blend;
@@ -539,11 +540,23 @@ export class GameRenderer {
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    if (sprite) {
-      ctx.drawImage(sprite, -w / 2, -h / 2 - 4, w, h);
+    if (activePowerup) {
+      const idx = Math.floor(hero.walkPhase * 0.85) % activePowerup.frames.length;
+      const sprite = activePowerup.frames[idx];
+      const w = activePowerup.drawW;
+      const h = activePowerup.drawH;
+      ctx.drawImage(sprite, -w / 2, -h / 2 + activePowerup.anchorDy, w, h);
     } else {
-      ctx.fillStyle = '#4ea1b8';
-      ctx.fillRect(-hero.hw, -hero.hh, hero.hw * 2, hero.hh * 2);
+      const w = CONFIG.HERO.SPRITE_W;
+      const h = CONFIG.HERO.SPRITE_H;
+      const frameIdx = WALK_CYCLE[Math.floor(hero.walkPhase) % WALK_CYCLE.length];
+      const sprite = this.heroFrames[frameIdx] || this.heroFrames[0];
+      if (sprite) {
+        ctx.drawImage(sprite, -w / 2, -h / 2 - 4, w, h);
+      } else {
+        ctx.fillStyle = '#4ea1b8';
+        ctx.fillRect(-hero.hw, -hero.hh, hero.hw * 2, hero.hh * 2);
+      }
     }
     ctx.restore();
   }

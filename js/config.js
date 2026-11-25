@@ -91,6 +91,29 @@ export const CONFIG = {
     SHOW_HITBOXES: false,
   },
 
+  // Powerups (test-mode toggles & tunable stats: Couple < Strollers < Tourists)
+  POWERUPS: {
+    ACTIVE: 'none', // 'none' | 'couple' | 'strollers' | 'tourists'
+    couple: {
+      halfW: 36,
+      halfH: 22,
+      weightBonus: 70,
+      slowPowerBonus: 80,
+    },
+    strollers: {
+      halfW: 48,
+      halfH: 29,
+      weightBonus: 150,
+      slowPowerBonus: 170,
+    },
+    tourists: {
+      halfW: 66,
+      halfH: 24,
+      weightBonus: 260,
+      slowPowerBonus: 280,
+    },
+  },
+
   // Chain scoring (Hero -> Ped -> Ped; only on-screen pedestrians can score)
   SCORING: {
     CONTACT_EPSILON: 4.5,
@@ -120,6 +143,17 @@ export const DEFAULT_TUNING = {
   tiltSensitivity: CONFIG.INPUT.TILT_SENSITIVITY,
   spawnRate: CONFIG.SPAWN.RATE_MULT,
   showHitboxes: CONFIG.DEBUG.SHOW_HITBOXES,
+
+  activePowerup: CONFIG.POWERUPS.ACTIVE,
+  coupleWidth: CONFIG.POWERUPS.couple.halfW,
+  coupleWeightBonus: CONFIG.POWERUPS.couple.weightBonus,
+  coupleSlowPowerBonus: CONFIG.POWERUPS.couple.slowPowerBonus,
+  strollersWidth: CONFIG.POWERUPS.strollers.halfW,
+  strollersWeightBonus: CONFIG.POWERUPS.strollers.weightBonus,
+  strollersSlowPowerBonus: CONFIG.POWERUPS.strollers.slowPowerBonus,
+  touristsWidth: CONFIG.POWERUPS.tourists.halfW,
+  touristsWeightBonus: CONFIG.POWERUPS.tourists.weightBonus,
+  touristsSlowPowerBonus: CONFIG.POWERUPS.tourists.slowPowerBonus,
 };
 
 export function applyTuningToConfig(t) {
@@ -140,4 +174,15 @@ export function applyTuningToConfig(t) {
   CONFIG.INPUT.TILT_SENSITIVITY = Number(t.tiltSensitivity);
   CONFIG.SPAWN.RATE_MULT = Number(t.spawnRate);
   CONFIG.DEBUG.SHOW_HITBOXES = Boolean(t.showHitboxes);
+
+  CONFIG.POWERUPS.ACTIVE = t.activePowerup || 'none';
+  CONFIG.POWERUPS.couple.halfW = Number(t.coupleWidth);
+  CONFIG.POWERUPS.couple.weightBonus = Number(t.coupleWeightBonus);
+  CONFIG.POWERUPS.couple.slowPowerBonus = Number(t.coupleSlowPowerBonus);
+  CONFIG.POWERUPS.strollers.halfW = Number(t.strollersWidth);
+  CONFIG.POWERUPS.strollers.weightBonus = Number(t.strollersWeightBonus);
+  CONFIG.POWERUPS.strollers.slowPowerBonus = Number(t.strollersSlowPowerBonus);
+  CONFIG.POWERUPS.tourists.halfW = Number(t.touristsWidth);
+  CONFIG.POWERUPS.tourists.weightBonus = Number(t.touristsWeightBonus);
+  CONFIG.POWERUPS.tourists.slowPowerBonus = Number(t.touristsSlowPowerBonus);
 }

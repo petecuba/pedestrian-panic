@@ -618,6 +618,43 @@ h1 {
   color: var(--accent-cyan);
 }
 
+.powerup-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.powerup-btn {
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 9px;
+  padding: 7px 4px;
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.powerup-btn.active {
+  background: rgba(250, 204, 21, 0.92);
+  border-color: #fde047;
+  color: #1c1917;
+}
+
+.powerup-summary {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.powerup-subpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 @media (max-width: 480px) {
   .app-shell {
     padding: 0;
