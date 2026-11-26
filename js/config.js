@@ -39,7 +39,7 @@ export const CONFIG = {
     SLOW_EASE_OUT_TIME: 0.22,
     RECOVER_Y_SPEED: 105,   // Smooth peak downward recovery speed while braking
     BASE_MASS: 210,         // Tuned Hero weight
-    SLOW_EXTRA_MASS: 200,   // Tuned slowdown power
+    SLOW_EXTRA_MASS: 240,   // Tuned slowdown power
     FRICTION: 0.85,         // Tuned Hero rear grip
     NO_CONTACT_DAMP: 24.0,  // Instant stop when no pedestrian is touching Hero
     GAME_OVER_Y: -22,       // Hero pushed off top of screen

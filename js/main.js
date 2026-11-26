@@ -9,7 +9,7 @@ import { SoundEngine } from './sound.js';
 import { PEDESTRIAN_VARIANT_COUNT } from './pedestrianArt.js';
 
 const HIGH_SCORE_KEY = 'pedestrian_panic_high_score_v1';
-const TUNING_KEY = 'pedestrian_panic_tuning_v3';
+const TUNING_KEY = 'pedestrian_panic_tuning_v4';
 
 const canvas = document.getElementById('game-canvas');
 const splashOverlay = document.getElementById('splash-screen');
@@ -341,6 +341,7 @@ function handleEvents(events) {
     switch (ev.type) {
       case 'slowStart':
         sound.playSlowStart();
+        renderer.triggerHeroTextBubble();
         break;
       case 'slowEnd':
         sound.playSlowEnd();

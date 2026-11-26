@@ -15,6 +15,42 @@ import { buildPowerupSprites } from './powerupArt.js';
 
 const WALK_CYCLE = [0, 1, 2, 1, 0, 3, 4, 3];
 
+// 32 short stereotypical YouTube comments Hero "texts" when hitting Slow Down
+const HERO_TEXT_COMMENTS = [
+  'FIRST!',
+  "Who's here in 2026?",
+  'Underrated tbh',
+  'Bro really did that',
+  'Scripted...',
+  'Skip to 2:14',
+  'Still watching!',
+  'Like if u agree',
+  'Pin me plz',
+  'Sub 4 sub?',
+  'Algorithm brought me',
+  '3AM gang rise up',
+  'Not clickbait!',
+  'Ratio',
+  'W take',
+  'L take ngl',
+  'Crying rn',
+  'Wait till the end',
+  'Anyone else??',
+  'Needs more views',
+  'Came for the title',
+  'Edit: thx 4 likes!',
+  'Nobody:',
+  'Peak content',
+  'Pure cinema',
+  'Real ones know',
+  'Early squad!',
+  'Unsubscribing.',
+  'Part 2 when?!',
+  'Skill issue',
+  'Mid at best',
+  'Rent free',
+];
+
 export class GameRenderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -40,6 +76,9 @@ export class GameRenderer {
 
     // Visual effects
     this.popups = [];
+    this.heroBubble = null;
+    this.heroCommentBag = [];
+    this.lastHeroComment = '';
     this.skidMarks = [];
     this.skidTimer = 0;
   }
@@ -191,6 +230,7 @@ export class GameRenderer {
 
   resetEffects() {
     this.popups = [];
+    this.heroBubble = null;
     this.skidMarks = [];
     this.skidTimer = 0;
     this.lastDistance = 0;
@@ -200,6 +240,34 @@ export class GameRenderer {
     this.initAwnings();
     // Seed a couple welcoming sidewalk pigeons ahead of Hero right away
     this.spawnPigeonFlock(135);
+  }
+
+  nextHeroComment() {
+    if (this.heroCommentBag.length === 0) {
+      this.heroCommentBag = [...HERO_TEXT_COMMENTS];
+      for (let i = this.heroCommentBag.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = this.heroCommentBag[i];
+        this.heroCommentBag[i] = this.heroCommentBag[j];
+        this.heroCommentBag[j] = tmp;
+      }
+      if (this.heroCommentBag.length > 1 && this.heroCommentBag[this.heroCommentBag.length - 1] === this.lastHeroComment) {
+        const swap = this.heroCommentBag[0];
+        this.heroCommentBag[0] = this.heroCommentBag[this.heroCommentBag.length - 1];
+        this.heroCommentBag[this.heroCommentBag.length - 1] = swap;
+      }
+    }
+    const text = this.heroCommentBag.pop();
+    this.lastHeroComment = text;
+    return text;
+  }
+
+  triggerHeroTextBubble() {
+    this.heroBubble = {
+      text: this.nextHeroComment(),
+      life: 0,
+      maxLife: 1.25,
+    };
   }
 
   initAwnings() {
@@ -386,12 +454,19 @@ export class GameRenderer {
     }
     this.skidMarks = this.skidMarks.filter((sk) => sk.life < sk.maxLife);
 
-    // 4. Floating comic reaction popups
+    // 4. Floating comic reaction popups & Hero text bubble
     for (const p of this.popups) {
       p.y -= (p.isRare ? 22 : 34) * dt;
       p.life += dt;
     }
     this.popups = this.popups.filter((p) => p.life < p.maxLife);
+
+    if (this.heroBubble) {
+      this.heroBubble.life += dt;
+      if (this.heroBubble.life >= this.heroBubble.maxLife) {
+        this.heroBubble = null;
+      }
+    }
 
     return { pigeonStartled };
   }
@@ -443,6 +518,11 @@ export class GameRenderer {
 
     // 9. Floating comic reaction popups (!, censored cuss words, "I'M WALKIN' HERE!")
     this.drawPopups(ctx);
+
+    // 9b. Hero smartphone text-message word bubble when pressing Slow Down
+    if (this.heroBubble) {
+      this.drawHeroTextBubble(ctx, sim.hero);
+    }
 
     // 10. Top danger-zone glow when Hero is close to being pushed off the top
     if (sim.hero.y < CONFIG.HERO.DANGER_Y) {
@@ -662,6 +742,72 @@ export class GameRenderer {
       }
       ctx.fillText(p.text, drawX, p.y);
     }
+    ctx.restore();
+  }
+
+  drawHeroTextBubble(ctx, hero) {
+    const b = this.heroBubble;
+    const t = b.life / b.maxLife;
+
+    // Snappy pop-in, steady readable hold, gentle fade-out
+    const alpha = t < 0.10 ? t / 0.10 : (t > 0.76 ? (1 - t) / 0.24 : 1);
+    const popScale = t < 0.12 ? 0.78 + 0.22 * (t / 0.12) : 1;
+    const riseY = t * 10;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    ctx.font = '400 10px "Geist Pixel", monospace';
+    const textW = ctx.measureText(b.text).width;
+    const padX = 8;
+    const boxW = Math.ceil(textW + padX * 2);
+    const boxH = 20;
+    const r = 8;
+
+    // Anchor slightly toward Hero's smartphone on the right, clamped cleanly inside viewport
+    const tailAnchorX = Math.max(16, Math.min(CONFIG.WIDTH - 16, hero.x + 8));
+    const centerX = Math.max(boxW / 2 + 8, Math.min(CONFIG.WIDTH - boxW / 2 - 8, tailAnchorX));
+    const anchorY = Math.max(boxH + 14, hero.y - hero.hh - 20 - riseY);
+
+    ctx.translate(centerX, anchorY);
+    ctx.scale(popScale, popScale);
+
+    const left = -boxW / 2;
+    const top = -boxH / 2;
+    const right = boxW / 2;
+    const bottom = boxH / 2;
+    const tailX = Math.max(left + 10, Math.min(right - 10, tailAnchorX - centerX));
+
+    // Classic iMessage-blue text bubble with crisp tail pointing toward Hero's phone
+    ctx.beginPath();
+    ctx.moveTo(left + r, top);
+    ctx.lineTo(right - r, top);
+    ctx.arcTo(right, top, right, top + r, r);
+    ctx.lineTo(right, bottom - r);
+    ctx.arcTo(right, bottom, right - r, bottom, r);
+    ctx.lineTo(tailX + 4, bottom);
+    ctx.lineTo(tailX + 1, bottom + 6);
+    ctx.lineTo(tailX - 4, bottom);
+    ctx.lineTo(left + r, bottom);
+    ctx.arcTo(left, bottom, left, bottom - r, r);
+    ctx.lineTo(left, top + r);
+    ctx.arcTo(left, top, left + r, top, r);
+    ctx.closePath();
+
+    ctx.fillStyle = '#0ea5e9';
+    ctx.fill();
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.stroke();
+
+    // Subtle glossy top rim inside bubble
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+    ctx.fillRect(left + r, top + 1.5, boxW - r * 2, 2);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(b.text, 0, 0.5);
+
     ctx.restore();
   }
 
