@@ -65,6 +65,9 @@ export const CONFIG = {
     DODGE_SPEED: 74,        // Peak lateral sidestep velocity (~10-14px smooth dodge)
     DODGE_DAMP: 8.5,        // Exponential decay so dodge feels crisp and natural
     DODGE_COOLDOWN: 3.0,    // 3s cooldown so it doesn't proc repeatedly
+    // Stronger ped-vs-ped interaction & active overtake when NOT connected to Hero
+    FREE_PED_PUSH_YIELD: 0.30, // Faster walker shoves slower walker forward noticeably
+    FREE_PED_OVERTAKE: 64,     // Active sidestep speed to pass around unlinked pedestrians
     // Subtle randomized diagonal path from startX (bottom) -> endX (top)
     PATH_DRIFT_MAX: 62,     // Max horizontal drift (+/- px) over a full screen crossing
     WEIGHT_AVG: 114,        // Mean pedestrian weight (spawns vary ±8 around this)

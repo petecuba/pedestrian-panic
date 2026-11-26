@@ -418,13 +418,13 @@ export class GameSimulation {
       ped.intendedScreenUp = intendedScreenUp;
       ped.y -= intendedScreenUp * dt;
 
-      // Subtle startX -> endX diagonal path drift (only while walking freely, not when stopped in a stack)
-      if (!ped.wasInContact && ped.pathSlope !== 0) {
+      // Subtle startX -> endX diagonal path drift (only while walking freely, not when stopped in a Hero stack)
+      if (ped.chainDepth === 0 && ped.pathSlope !== 0) {
         const driftScale = (P.PATH_DRIFT_MAX || 0) / 62;
         ped.x = clamp(ped.x + ped.pathSlope * driftScale * intendedScreenUp * dt, minPedX, maxPedX);
       }
 
-      // Smooth decaying first-contact dodge sidestep
+      // Smooth decaying first-contact dodge / unlinked-overtake sidestep
       if (Math.abs(ped.dodgeVel) > 0.4) {
         ped.x = clamp(ped.x + ped.dodgeVel * dt, minPedX, maxPedX);
         ped.dodgeVel *= Math.exp(-P.DODGE_DAMP * dt);
@@ -437,8 +437,11 @@ export class GameSimulation {
     //    Friction maps 0 (super slippery, 1.85x corner glide) -> 1 (very grippy, 0.15x)
     const heroPedFriction = clamp(0.55 * H.FRICTION + 0.45 * P.FRICTION, 0, 1);
     const heroPedSlip = 1.85 - heroPedFriction * 1.70;
-    const pedPedSlip = 1.85 - clamp(P.FRICTION, 0, 1) * 1.70;
+    // Linked ped-vs-ped keeps slightly firmer physical push; unlinked ped-vs-ped glides & overtakes cleanly
+    const linkedPedSlip = Math.max(0.36, 1.85 - clamp(P.FRICTION, 0, 1) * 1.50);
+    const freePedSlip = 1.55;
     const collidedIds = new Set();
+    const freeOvertakePairs = [];
     const iterations = 8;
 
     for (let iter = 0; iter < iterations; iter++) {
@@ -471,11 +474,22 @@ export class GameSimulation {
           collidedIds.add(a.id);
           collidedIds.add(b.id);
 
-          const sepX = hit.nx * hit.pen * 0.5 * (Math.abs(hit.nx) > 0.01 ? pedPedSlip : 1.0);
+          const isConnectedToHero = (a.chainDepth > 0) || (b.chainDepth > 0);
+          if (!isConnectedToHero && iter === 0) {
+            freeOvertakePairs.push([a, b]);
+          }
+
+          const slip = isConnectedToHero ? linkedPedSlip : freePedSlip;
+          const sepX = hit.nx * hit.pen * 0.52 * (Math.abs(hit.nx) > 0.01 ? slip : 1.0);
           a.x = clamp(a.x - sepX, minPedX, maxPedX);
           b.x = clamp(b.x + sepX, minPedX, maxPedX);
 
-          const frontYield = slowEase > 0.15 ? 0.0 : 0.05;
+          // Stronger forward push between pedestrians!
+          // - When NOT connected to Hero: rear ped pushes front ped noticeably harder (FREE_PED_PUSH_YIELD = 0.30)
+          // - When connected to Hero: firmer internal jostle (0.12 normal, 0.0 when Hero is braking back)
+          const frontYield = isConnectedToHero
+            ? (slowEase > 0.15 ? 0.0 : 0.12)
+            : P.FREE_PED_PUSH_YIELD;
           const backYield = 1.0 - frontYield;
           if (a.y > b.y) {
             b.y += hit.ny * hit.pen * frontYield;
@@ -486,6 +500,26 @@ export class GameSimulation {
           }
         }
       }
+    }
+
+    // 8b-2. Active overtake dodge for Pedestrians colliding WITHOUT a connection to Hero:
+    //       the faster rear walker actively sidesteps around the slower one to continue on their path!
+    for (const [a, b] of freeOvertakePairs) {
+      const aIsBehind = a.y > b.y;
+      const rear = aIsBehind ? a : b;
+      const front = aIsBehind ? b : a;
+      const dx = rear.x - front.x;
+
+      // Pick side with more room (or whichever side rear ped is already slightly offset toward)
+      let passDir;
+      if (rear.x < minPedX + 26) passDir = 1;
+      else if (rear.x > maxPedX - 26) passDir = -1;
+      else if (Math.abs(dx) > 3) passDir = Math.sign(dx);
+      else passDir = rear.pathSlope !== 0 ? Math.sign(rear.pathSlope) : (rear.id % 2 === 0 ? 1 : -1);
+
+      // Rear walker briskly steps around the side; front walker yields slightly opposite
+      rear.x = clamp(rear.x + passDir * P.FREE_PED_OVERTAKE * dt, minPedX, maxPedX);
+      front.x = clamp(front.x - passDir * (P.FREE_PED_OVERTAKE * 0.28) * dt, minPedX, maxPedX);
     }
 
     // 8c. Small random left/right reflex dodge ONLY on the FIRST instance of a collision (3s cooldown)
