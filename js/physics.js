@@ -402,7 +402,7 @@ export class GameSimulation {
     const prevHeroY = hero.y;
     hero.y += hero.vy * dt;
 
-    // 7. Advance Pedestrians straight upward — ZERO artificial left/right reaction
+    // 7. Advance Pedestrians along their randomized startX -> endX path + active reflex dodge
     const minPedX = CONFIG.CURB_X + P.HALF_W;
     const maxPedX = CONFIG.RIGHT_WALL_X - P.HALF_W;
 
@@ -410,9 +410,27 @@ export class GameSimulation {
       ped.prevX = ped.x;
       ped.prevY = ped.y;
 
+      if (ped.dodgeCooldown > 0) {
+        ped.dodgeCooldown = Math.max(0, ped.dodgeCooldown - dt);
+      }
+
       const intendedScreenUp = ped.upwardSpeed * P.SPEED_MULT + slowSpeedBonus * 0.55;
       ped.intendedScreenUp = intendedScreenUp;
       ped.y -= intendedScreenUp * dt;
+
+      // Subtle startX -> endX diagonal path drift (only while walking freely, not when stopped in a stack)
+      if (!ped.wasInContact && ped.pathSlope !== 0) {
+        const driftScale = (P.PATH_DRIFT_MAX || 0) / 62;
+        ped.x = clamp(ped.x + ped.pathSlope * driftScale * intendedScreenUp * dt, minPedX, maxPedX);
+      }
+
+      // Smooth decaying first-contact dodge sidestep
+      if (Math.abs(ped.dodgeVel) > 0.4) {
+        ped.x = clamp(ped.x + ped.dodgeVel * dt, minPedX, maxPedX);
+        ped.dodgeVel *= Math.exp(-P.DODGE_DAMP * dt);
+      } else {
+        ped.dodgeVel = 0;
+      }
     }
 
     // 8. Pure geometric rounded-corner collision resolution (8 passes)
@@ -420,6 +438,7 @@ export class GameSimulation {
     const heroPedFriction = clamp(0.55 * H.FRICTION + 0.45 * P.FRICTION, 0, 1);
     const heroPedSlip = 1.85 - heroPedFriction * 1.70;
     const pedPedSlip = 1.85 - clamp(P.FRICTION, 0, 1) * 1.70;
+    const collidedIds = new Set();
     const iterations = 8;
 
     for (let iter = 0; iter < iterations; iter++) {
@@ -427,6 +446,7 @@ export class GameSimulation {
       for (const ped of this.pedestrians) {
         const hit = roundedBoxOverlap(hero, ped, 0);
         if (!hit) continue;
+        collidedIds.add(ped.id);
 
         if (hit.dy >= 0) {
           const slideX = hit.nx * hit.pen * (Math.abs(hit.nx) > 0.01 ? heroPedSlip : 1.0);
@@ -448,6 +468,8 @@ export class GameSimulation {
           const b = this.pedestrians[j];
           const hit = roundedBoxOverlap(a, b, 0);
           if (!hit) continue;
+          collidedIds.add(a.id);
+          collidedIds.add(b.id);
 
           const sepX = hit.nx * hit.pen * 0.5 * (Math.abs(hit.nx) > 0.01 ? pedPedSlip : 1.0);
           a.x = clamp(a.x - sepX, minPedX, maxPedX);
@@ -464,6 +486,27 @@ export class GameSimulation {
           }
         }
       }
+    }
+
+    // 8c. Small random left/right reflex dodge ONLY on the FIRST instance of a collision (3s cooldown)
+    for (const ped of this.pedestrians) {
+      const isNowInContact = collidedIds.has(ped.id);
+      if (isNowInContact && !ped.wasInContact && ped.dodgeCooldown <= 0 && P.DODGE_SPEED > 0) {
+        if (Math.random() < P.DODGE_CHANCE) {
+          let dir = Math.random() < 0.5 ? -1 : 1;
+          // If pinned close to the curb or right storefront wall, dodge away from the edge
+          if (ped.x < minPedX + 14) dir = 1;
+          else if (ped.x > maxPedX - 14) dir = -1;
+
+          const mag = P.DODGE_SPEED * (0.72 + Math.random() * 0.56);
+          ped.dodgeVel = dir * mag;
+          ped.dodgeCooldown = P.DODGE_COOLDOWN;
+        } else {
+          // Even if roll skips dodge, apply a brief guard so it only checks on fresh collisions
+          ped.dodgeCooldown = 0.6;
+        }
+      }
+      ped.wasInContact = isNowInContact;
     }
 
     // Track pedestrian horizontal delta purely for subtle visual lean in renderer
@@ -615,17 +658,31 @@ export class GameSimulation {
     const weightOffset = (Math.random() * 2 - 1) * P.WEIGHT_SPREAD;
     const pushPower = P.WEIGHT_AVG + weightOffset + difficultyProgress * P.PUSH_POWER_RAMP;
 
-    const baseSpeed = P.MIN_REL_SPEED + Math.random() * (P.MAX_REL_SPEED - P.MIN_REL_SPEED);
+    // Wider randomized walking speed (mix of dawdlers, normal commuters, and brisk power-walkers)
+    const speedRoll = Math.random();
+    const baseSpeed = P.MIN_REL_SPEED + speedRoll * (P.MAX_REL_SPEED - P.MIN_REL_SPEED);
     const variation = baseSpeed * ((Math.random() * 2 - 1) * P.SPEED_VARIATION);
-    const upwardSpeed = baseSpeed + variation + difficultyProgress * 18;
+    const upwardSpeed = Math.max(28, baseSpeed + variation + difficultyProgress * 18);
+
+    // Subtle randomized diagonal sidewalk path from startX -> endX
+    const rawDrift = (Math.random() * 2 - 1) * 62;
+    const endX = clamp(x + rawDrift, minX, maxX);
+    const totalTravelY = Math.max(1, spawnY - P.DESPAWN_TOP_Y);
+    const pathSlope = (endX - x) / totalTravelY;
 
     this.pedestrians.push({
       id: this.nextPedId++,
       x,
       y: spawnY,
+      startX: x,
+      endX,
+      pathSlope,
       prevX: x,
       prevY: spawnY,
       vx: 0,
+      dodgeVel: 0,
+      dodgeCooldown: 0,
+      wasInContact: false,
       hw: P.HALF_W,
       hh: P.HALF_H,
       rTop: P.CORNER_R_TOP,

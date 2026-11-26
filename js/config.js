@@ -57,9 +57,16 @@ export const CONFIG = {
     CORNER_R_BOT: 9.0,
     FRICTION: 1.0,          // Tuned crowd grip
     SPEED_MULT: 1.0,        // Multiplier on pedestrian walking velocity
-    MIN_REL_SPEED: 52,      // Base walking speed range (decoupled from weight)
-    MAX_REL_SPEED: 84,
-    SPEED_VARIATION: 0.1,
+    MIN_REL_SPEED: 34,      // Wider walking speed randomization (leisurely strollers -> brisk rushers)
+    MAX_REL_SPEED: 118,
+    SPEED_VARIATION: 0.14,
+    // Small random left/right dodge on first instance of a collision (with 3s cooldown)
+    DODGE_CHANCE: 0.75,     // 75% chance to reflex-dodge on fresh contact
+    DODGE_SPEED: 74,        // Peak lateral sidestep velocity (~10-14px smooth dodge)
+    DODGE_DAMP: 8.5,        // Exponential decay so dodge feels crisp and natural
+    DODGE_COOLDOWN: 3.0,    // 3s cooldown so it doesn't proc repeatedly
+    // Subtle randomized diagonal path from startX (bottom) -> endX (top)
+    PATH_DRIFT_MAX: 62,     // Max horizontal drift (+/- px) over a full screen crossing
     WEIGHT_AVG: 114,        // Mean pedestrian weight (spawns vary ±8 around this)
     WEIGHT_SPREAD: 8,
     PUSH_POWER_RAMP: 12,
@@ -139,6 +146,8 @@ export const DEFAULT_TUNING = {
   pedWeight: CONFIG.PED.WEIGHT_AVG,
   pedForce: CONFIG.PED.FORCE_MULT,
   pedFriction: CONFIG.PED.FRICTION,
+  pedDodgeSpeed: CONFIG.PED.DODGE_SPEED,
+  pedPathDrift: CONFIG.PED.PATH_DRIFT_MAX,
 
   tiltSensitivity: CONFIG.INPUT.TILT_SENSITIVITY,
   spawnRate: CONFIG.SPAWN.RATE_MULT,
@@ -170,6 +179,8 @@ export function applyTuningToConfig(t) {
   CONFIG.PED.WEIGHT_AVG = Number(t.pedWeight);
   CONFIG.PED.FORCE_MULT = Number(t.pedForce);
   CONFIG.PED.FRICTION = Number(t.pedFriction);
+  CONFIG.PED.DODGE_SPEED = Number(t.pedDodgeSpeed);
+  CONFIG.PED.PATH_DRIFT_MAX = Number(t.pedPathDrift);
 
   CONFIG.INPUT.TILT_SENSITIVITY = Number(t.tiltSensitivity);
   CONFIG.SPAWN.RATE_MULT = Number(t.spawnRate);
